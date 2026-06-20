@@ -13,6 +13,28 @@ test cases, executes them concurrently against the target API, detects regressio
 schema versions, computes coverage analytics, and produces reports consumable by CI/CD.
 Built entirely on free-tier infrastructure as a portfolio-grade, production-style system.
 
+## Session Start Protocol (applies to every model, every session)
+Before writing any code, regardless of which model you are:
+1. Read PROGRESS.md. State back to the user, in 2-3 sentences, what's already built
+   and which roadmap week is in progress.
+2. Read the most recent entries in CHANGELOG.md to understand what the last session
+   did and why, not just what's checked off.
+3. Do NOT refactor, restructure, or "improve" existing code to match your own style
+   preferences unless explicitly asked. A different model touched this codebase before
+   you and will likely touch it again after you — consistency matters more than your
+   personal architectural taste. Match existing patterns.
+4. Before ending the session (or before you sense you're about to hit a usage limit),
+   update PROGRESS.md with exactly what was completed, and CHANGELOG.md with a dated
+   entry. Leave the repo in a state where any other model could pick it up cold.
+
+## Multi-Model Rotation Notes
+This project is being built across multiple models (Gemini 3 Pro, Opus 4.6, Gemini 3.5
+Flash, others) as usage limits dictate. There is no shared memory between them —
+AGENTS.md and PROGRESS.md are the only continuity mechanism. Treat every file in this
+repo as having been written by "the team," not by a predecessor you can second-guess.
+If you genuinely believe an existing approach is wrong (not just different from how
+you'd do it), flag it explicitly to the user rather than silently changing it.
+
 ## Tech Stack (do not substitute without discussion)
 - Backend: Go 1.22+, Gin framework, GORM
 - DB: PostgreSQL via Neon (free tier: 512MB, 1 branch)
