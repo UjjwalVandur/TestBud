@@ -136,6 +136,7 @@ fails the build if coverage < threshold (default 70%, make configurable) → upl
 report as a build artifact on pass.
 
 ## Engineering Standards
+- Git Branching Strategy: Always develop and push changes to the `dev` branch first, then merge into the `main` branch (production) after verification.
 - Idiomatic Go: explicit error handling (no swallowed errors), table-driven tests,
   context propagation for cancellation (especially in the worker pool and HTTP calls).
 - `go vet` and `golangci-lint` clean before considering anything done.
