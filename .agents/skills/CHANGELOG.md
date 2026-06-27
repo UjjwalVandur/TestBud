@@ -16,4 +16,4 @@ and this project adheres to semantic versioning once releases begin.
 - Added Week 1 GORM models for users, schemas, and endpoints.
 - Added OpenAPI schema upload flow with parse-before-persist validation.
 - Added parser and upload service tests.
-- Added Git Branching Strategy to Engineering Standards and set up the `dev` branch.
+- Added Git Branching Strategy to  Engineering Standards and set up the `dev` branch.
