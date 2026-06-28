@@ -56,6 +56,20 @@ func (s *SchemaService) UploadSchema(ctx context.Context, input UploadSchemaInpu
 		return UploadSchemaResult{}, err
 	}
 
+	// DEV-2: Short-circuit if an identical schema already exists for this project.
+	existing, err := s.repo.FindByProjectAndHash(ctx, input.ProjectID, parsed.SchemaHash)
+	if err != nil {
+		return UploadSchemaResult{}, fmt.Errorf("dedup check: %w", err)
+	}
+	if existing != nil {
+		return UploadSchemaResult{
+			SchemaID:       existing.ID,
+			SchemaHash:     existing.SchemaHash,
+			OpenAPIVersion: existing.OpenAPIVersion,
+			EndpointCount:  len(parsed.Endpoints),
+		}, nil
+	}
+
 	schema := &models.Schema{
 		ProjectID:      input.ProjectID,
 		Version:        input.Version,

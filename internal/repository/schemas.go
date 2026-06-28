@@ -2,8 +2,10 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -11,6 +13,7 @@ import (
 
 type SchemaRepository interface {
 	CreateSchema(ctx context.Context, schema *models.Schema, endpoints []models.Endpoint) error
+	FindByProjectAndHash(ctx context.Context, projectID uuid.UUID, schemaHash string) (*models.Schema, error)
 }
 
 type GormSchemaRepository struct {
@@ -38,4 +41,20 @@ func (r *GormSchemaRepository) CreateSchema(ctx context.Context, schema *models.
 
 		return nil
 	})
+}
+
+// FindByProjectAndHash returns the existing schema for the given project and
+// hash, or nil if none exists. Used for dedup on re-upload (DEV-2).
+func (r *GormSchemaRepository) FindByProjectAndHash(ctx context.Context, projectID uuid.UUID, schemaHash string) (*models.Schema, error) {
+	var schema models.Schema
+	err := r.db.WithContext(ctx).
+		Where("project_id = ? AND schema_hash = ?", projectID, schemaHash).
+		First(&schema).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find schema by project and hash: %w", err)
+	}
+	return &schema, nil
 }

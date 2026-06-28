@@ -5,12 +5,15 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/api/handlers"
-	"github.com/UjjwalVandur/TestBud/internal/service"
+	"github.com/UjjwalVandur/TestBud/internal/api/middleware"
 )
 
+// RouterDependencies uses interfaces so the router is testable without concrete
+// service/repository implementations (DEV-1 fix).
 type RouterDependencies struct {
 	Logger        *logrus.Logger
-	SchemaService *service.SchemaService
+	SchemaService handlers.SchemaUploader
+	UserLookup    middleware.UserLookup
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -25,6 +28,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 
 	schemaHandler := handlers.NewSchemaHandler(deps.SchemaService)
 	api := router.Group("/api")
+	api.Use(middleware.APIKeyAuth(deps.UserLookup))
 	api.POST("/schemas", schemaHandler.Upload)
 
 	return router
@@ -44,3 +48,4 @@ func requestLogger(logger *logrus.Logger) gin.HandlerFunc {
 		}).Info("request completed")
 	}
 }
+

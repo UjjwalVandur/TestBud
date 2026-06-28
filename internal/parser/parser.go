@@ -135,10 +135,15 @@ func normalizeEndpoints(doc *openapi3.T) ([]Endpoint, error) {
 				return nil, fmt.Errorf("%s %s response schema: %w", method, path, err)
 			}
 
+			hash, err := endpointHash(method, path, parameters, requestSchema)
+			if err != nil {
+				return nil, fmt.Errorf("%s %s endpoint hash: %w", method, path, err)
+			}
+
 			endpoints = append(endpoints, Endpoint{
 				Method:             method,
 				Path:               path,
-				EndpointHash:       endpointHash(method, path, parameters, requestSchema),
+				EndpointHash:       hash,
 				AuthRequired:       authRequired(doc, operation),
 				ParametersJSON:     parameters,
 				RequestSchemaJSON:  requestSchema,
@@ -178,7 +183,7 @@ func authRequired(doc *openapi3.T, operation *openapi3.Operation) bool {
 	return len(doc.Security) > 0
 }
 
-func endpointHash(method, path string, parameters, requestSchema json.RawMessage) string {
+func endpointHash(method, path string, parameters, requestSchema json.RawMessage) (string, error) {
 	payload := struct {
 		Method        string          `json:"method"`
 		Path          string          `json:"path"`
@@ -190,8 +195,11 @@ func endpointHash(method, path string, parameters, requestSchema json.RawMessage
 		Parameters:    parameters,
 		RequestSchema: requestSchema,
 	}
-	b, _ := json.Marshal(payload)
-	return sha256Hex(b)
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal endpoint hash payload: %w", err)
+	}
+	return sha256Hex(b), nil
 }
 
 func sha256Hex(raw []byte) string {

@@ -25,6 +25,10 @@ type fakeRepo struct {
 	schema    *models.Schema
 	endpoints []models.Endpoint
 	err       error
+
+	// findResult is returned by FindByProjectAndHash.
+	findResult *models.Schema
+	findErr    error
 }
 
 func (f *fakeRepo) CreateSchema(_ context.Context, schema *models.Schema, endpoints []models.Endpoint) error {
@@ -34,6 +38,10 @@ func (f *fakeRepo) CreateSchema(_ context.Context, schema *models.Schema, endpoi
 	f.schema = schema
 	f.endpoints = endpoints
 	return nil
+}
+
+func (f *fakeRepo) FindByProjectAndHash(_ context.Context, _ uuid.UUID, _ string) (*models.Schema, error) {
+	return f.findResult, f.findErr
 }
 
 func TestSchemaServiceUploadSchema(t *testing.T) {
@@ -93,6 +101,26 @@ func TestSchemaServiceUploadSchema(t *testing.T) {
 			parser:  fakeParser{},
 			wantErr: true,
 		},
+		{
+			name: "missing uploaded_by fails",
+			input: UploadSchemaInput{
+				ProjectID: projectID,
+				Version:   "1.0.0",
+				RawBytes:  []byte(`{}`),
+			},
+			parser:  fakeParser{},
+			wantErr: true,
+		},
+		{
+			name: "missing version fails",
+			input: UploadSchemaInput{
+				ProjectID:  projectID,
+				UploadedBy: uploadedBy,
+				RawBytes:   []byte(`{}`),
+			},
+			parser:  fakeParser{},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -123,5 +151,43 @@ func TestSchemaServiceUploadSchema(t *testing.T) {
 				t.Fatalf("persisted endpoints = %d, want 1", len(repo.endpoints))
 			}
 		})
+	}
+}
+
+func TestSchemaServiceUploadSchema_Dedup(t *testing.T) {
+	projectID := uuid.New()
+	uploadedBy := uuid.New()
+	existingID := uuid.New()
+
+	repo := &fakeRepo{
+		findResult: &models.Schema{
+			ID:             existingID,
+			SchemaHash:     "existing-hash",
+			OpenAPIVersion: "3.0.3",
+		},
+	}
+	svc := NewSchemaService(fakeParser{
+		parsed: parser.ParsedSchema{
+			OpenAPIVersion: "3.0.3",
+			SchemaHash:     "existing-hash",
+			Endpoints:      []parser.Endpoint{{Method: "GET", Path: "/pets"}},
+		},
+	}, repo)
+
+	got, err := svc.UploadSchema(context.Background(), UploadSchemaInput{
+		ProjectID:  projectID,
+		Version:    "1.0.0",
+		UploadedBy: uploadedBy,
+		RawBytes:   []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("UploadSchema() error = %v", err)
+	}
+	if got.SchemaID != existingID {
+		t.Fatalf("SchemaID = %v, want %v (existing)", got.SchemaID, existingID)
+	}
+	// Verify CreateSchema was NOT called (no duplicate row).
+	if repo.schema != nil {
+		t.Fatal("schema should not have been created (dedup)")
 	}
 }

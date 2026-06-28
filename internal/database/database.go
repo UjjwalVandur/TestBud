@@ -17,7 +17,7 @@ func Connect(cfg config.Config) (*gorm.DB, error) {
 	}
 
 	if cfg.AutoMigrate {
-		if err := db.AutoMigrate(&models.User{}, &models.Schema{}, &models.Endpoint{}); err != nil {
+		if err := db.AutoMigrate(&models.User{}, &models.Schema{}, &models.Endpoint{}, &models.TestCase{}, &models.Execution{}, &models.CoverageReport{}); err != nil {
 			return nil, fmt.Errorf("auto migrate: %w", err)
 		}
 	}

@@ -65,3 +65,75 @@ func (e *Endpoint) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+// TestCaseCategory is the enum type for test case categories.
+type TestCaseCategory string
+
+const (
+	CategoryPositive TestCaseCategory = "positive"
+	CategoryNegative TestCaseCategory = "negative"
+	CategoryBoundary TestCaseCategory = "boundary"
+	CategorySecurity TestCaseCategory = "security"
+)
+
+type TestCase struct {
+	ID             uuid.UUID        `gorm:"type:uuid;primaryKey"`
+	EndpointID     uuid.UUID        `gorm:"type:uuid;not null;index:idx_test_cases_endpoint_category"`
+	Category       TestCaseCategory `gorm:"type:varchar(20);not null;index:idx_test_cases_endpoint_category"`
+	PayloadJSON    datatypes.JSON   `gorm:"type:jsonb;not null"`
+	ExpectedStatus int              `gorm:"not null"`
+	GeneratedAt    time.Time        `gorm:"not null"`
+
+	Endpoint Endpoint `gorm:"foreignKey:EndpointID;references:ID;constraint:OnDelete:CASCADE;"`
+}
+
+func (tc *TestCase) BeforeCreate(_ *gorm.DB) error {
+	if tc.ID == uuid.Nil {
+		tc.ID = uuid.New()
+	}
+	if tc.GeneratedAt.IsZero() {
+		tc.GeneratedAt = time.Now().UTC()
+	}
+	return nil
+}
+
+type Execution struct {
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey"`
+	TestCaseID uuid.UUID `gorm:"type:uuid;not null;index"`
+	ActualStatus int     `gorm:"not null"`
+	ResponseMs   int64   `gorm:"not null"`
+	Passed       bool    `gorm:"not null"`
+	RanAt        time.Time `gorm:"not null;index"`
+
+	TestCase TestCase `gorm:"foreignKey:TestCaseID;references:ID;constraint:OnDelete:CASCADE;"`
+}
+
+func (ex *Execution) BeforeCreate(_ *gorm.DB) error {
+	if ex.ID == uuid.Nil {
+		ex.ID = uuid.New()
+	}
+	if ex.RanAt.IsZero() {
+		ex.RanAt = time.Now().UTC()
+	}
+	return nil
+}
+
+type CoverageReport struct {
+	ID           uuid.UUID      `gorm:"type:uuid;primaryKey"`
+	SchemaID     uuid.UUID      `gorm:"type:uuid;not null;index"`
+	EndpointPct  float64        `gorm:"type:numeric(5,2);not null"`
+	CategoryJSON datatypes.JSON `gorm:"type:jsonb;not null"`
+	GeneratedAt  time.Time      `gorm:"not null"`
+
+	Schema Schema `gorm:"foreignKey:SchemaID;references:ID;constraint:OnDelete:CASCADE;"`
+}
+
+func (cr *CoverageReport) BeforeCreate(_ *gorm.DB) error {
+	if cr.ID == uuid.Nil {
+		cr.ID = uuid.New()
+	}
+	if cr.GeneratedAt.IsZero() {
+		cr.GeneratedAt = time.Now().UTC()
+	}
+	return nil
+}

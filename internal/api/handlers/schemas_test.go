@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/UjjwalVandur/TestBud/internal/api/middleware"
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
@@ -34,9 +35,18 @@ func (f *fakeSchemaUploader) UploadSchema(_ context.Context, input service.Uploa
 	}, nil
 }
 
+// fakeUserLookup stubs the middleware.UserLookup interface for testing.
+type fakeUserLookup struct {
+	userID uuid.UUID
+}
+
+func (f fakeUserLookup) FindUserIDByAPIKey(_ context.Context, _ string) (uuid.UUID, error) {
+	return f.userID, nil
+}
+
 func TestSchemaHandlerUpload(t *testing.T) {
 	projectID := uuid.New()
-	uploadedBy := uuid.New()
+	authenticatedUserID := uuid.New()
 
 	tests := []struct {
 		name       string
@@ -44,53 +54,72 @@ func TestSchemaHandlerUpload(t *testing.T) {
 		fileName   string
 		fileBody   string
 		uploader   *fakeSchemaUploader
+		apiKey     string
+		userID     uuid.UUID
 		wantStatus int
 	}{
 		{
 			name: "valid upload",
 			form: map[string]string{
-				"project_id":  projectID.String(),
-				"uploaded_by": uploadedBy.String(),
-				"version":     "1.0.0",
+				"project_id": projectID.String(),
+				"version":    "1.0.0",
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{"openapi":"3.0.3"}`,
 			uploader:   &fakeSchemaUploader{},
+			apiKey:     "test-key",
+			userID:     authenticatedUserID,
 			wantStatus: http.StatusCreated,
 		},
 		{
 			name: "missing file",
 			form: map[string]string{
-				"project_id":  projectID.String(),
-				"uploaded_by": uploadedBy.String(),
-				"version":     "1.0.0",
+				"project_id": projectID.String(),
+				"version":    "1.0.0",
 			},
 			uploader:   &fakeSchemaUploader{},
+			apiKey:     "test-key",
+			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "invalid project id",
 			form: map[string]string{
-				"project_id":  "not-a-uuid",
-				"uploaded_by": uploadedBy.String(),
-				"version":     "1.0.0",
+				"project_id": "not-a-uuid",
+				"version":    "1.0.0",
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{}`,
 			uploader:   &fakeSchemaUploader{},
+			apiKey:     "test-key",
+			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "service validation error",
 			form: map[string]string{
-				"project_id":  projectID.String(),
-				"uploaded_by": uploadedBy.String(),
-				"version":     "1.0.0",
+				"project_id": projectID.String(),
+				"version":    "1.0.0",
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{}`,
 			uploader:   &fakeSchemaUploader{err: errors.New("parse failed")},
+			apiKey:     "test-key",
+			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "missing api key returns 401",
+			form: map[string]string{
+				"project_id": projectID.String(),
+				"version":    "1.0.0",
+			},
+			fileName:   "openapi.json",
+			fileBody:   `{}`,
+			uploader:   &fakeSchemaUploader{},
+			apiKey:     "",
+			userID:     uuid.Nil,
+			wantStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -98,11 +127,18 @@ func TestSchemaHandlerUpload(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			router := gin.New()
-			router.POST("/api/schemas", NewSchemaHandler(tt.uploader).Upload)
+
+			lookup := fakeUserLookup{userID: tt.userID}
+			api := router.Group("/api")
+			api.Use(middleware.APIKeyAuth(lookup))
+			api.POST("/schemas", NewSchemaHandler(tt.uploader).Upload)
 
 			body, contentType := multipartBody(t, tt.form, tt.fileName, tt.fileBody)
 			req := httptest.NewRequest(http.MethodPost, "/api/schemas", body)
 			req.Header.Set("Content-Type", contentType)
+			if tt.apiKey != "" {
+				req.Header.Set("X-API-Key", tt.apiKey)
+			}
 
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -120,6 +156,10 @@ func TestSchemaHandlerUpload(t *testing.T) {
 				}
 				if string(tt.uploader.input.RawBytes) != tt.fileBody {
 					t.Fatalf("RawBytes = %q, want %q", string(tt.uploader.input.RawBytes), tt.fileBody)
+				}
+				// Verify uploaded_by comes from auth context, not form input.
+				if tt.uploader.input.UploadedBy != tt.userID {
+					t.Fatalf("UploadedBy = %v, want %v (from auth context)", tt.uploader.input.UploadedBy, tt.userID)
 				}
 			}
 		})

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/UjjwalVandur/TestBud/internal/api/middleware"
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
@@ -31,14 +32,17 @@ func (h *SchemaHandler) Upload(c *gin.Context) {
 		return
 	}
 
+	// Derive the uploader identity from the authenticated user in context,
+	// not from user-supplied form data (DEV-5 security fix).
+	uploadedBy := middleware.AuthenticatedUserID(c.Request.Context())
+	if uploadedBy == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
 	projectID, err := uuid.Parse(c.PostForm("project_id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "project_id must be a valid UUID"})
-		return
-	}
-	uploadedBy, err := uuid.Parse(c.PostForm("uploaded_by"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "uploaded_by must be a valid UUID"})
 		return
 	}
 	version := c.PostForm("version")
@@ -87,3 +91,4 @@ func (h *SchemaHandler) Upload(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, result)
 }
+

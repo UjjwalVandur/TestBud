@@ -120,3 +120,30 @@ func TestParserParse(t *testing.T) {
 		})
 	}
 }
+
+func TestSwaggerParsedFields(t *testing.T) {
+	got, err := NewParser().Parse(context.Background(), []byte(validSwagger))
+	if err != nil {
+		t.Fatalf("Parse(swagger) error = %v", err)
+	}
+	if len(got.Endpoints) != 1 {
+		t.Fatalf("len(Endpoints) = %d, want 1", len(got.Endpoints))
+	}
+
+	ep := got.Endpoints[0]
+	if ep.Method != "GET" {
+		t.Fatalf("Method = %q, want GET", ep.Method)
+	}
+	if ep.Path != "/pets" {
+		t.Fatalf("Path = %q, want /pets", ep.Path)
+	}
+	if ep.AuthRequired {
+		t.Fatal("AuthRequired = true, want false (no security in swagger spec)")
+	}
+	if ep.EndpointHash == "" {
+		t.Fatal("EndpointHash is empty")
+	}
+	if string(ep.ResponseSchemaJSON) == "{}" || string(ep.ResponseSchemaJSON) == "" {
+		t.Fatalf("ResponseSchemaJSON should not be empty for swagger spec with a 200 response, got %q", string(ep.ResponseSchemaJSON))
+	}
+}

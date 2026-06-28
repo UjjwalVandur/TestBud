@@ -35,10 +35,12 @@ func main() {
 	}
 
 	schemaRepo := repository.NewGormSchemaRepository(db)
+	userRepo := repository.NewGormUserRepository(db)
 	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo)
 	router := api.NewRouter(api.RouterDependencies{
 		Logger:        logger,
 		SchemaService: schemaService,
+		UserLookup:    userRepo,
 	})
 
 	server := &http.Server{
