@@ -91,4 +91,3 @@ func (h *SchemaHandler) Upload(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, result)
 }
-

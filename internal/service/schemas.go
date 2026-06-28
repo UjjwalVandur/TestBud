@@ -117,6 +117,7 @@ func (s *SchemaService) UploadSchema(ctx context.Context, input UploadSchemaInpu
 					Category:       tc.Category,
 					PayloadJSON:    tc.PayloadJSON,
 					ExpectedStatus: tc.ExpectedStatus,
+					GeneratedAt:    tc.GeneratedAt, // DEV-11: preserve original generation timestamp
 				}
 			}
 			endpoints[i].TestCases = newCases

@@ -100,11 +100,11 @@ func (tc *TestCase) BeforeCreate(_ *gorm.DB) error {
 }
 
 type Execution struct {
-	ID         uuid.UUID `gorm:"type:uuid;primaryKey"`
-	TestCaseID uuid.UUID `gorm:"type:uuid;not null;index"`
-	ActualStatus int     `gorm:"not null"`
-	ResponseMs   int64   `gorm:"not null"`
-	Passed       bool    `gorm:"not null"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
+	TestCaseID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	ActualStatus int       `gorm:"not null"`
+	ResponseMs   int64     `gorm:"not null"`
+	Passed       bool      `gorm:"not null"`
 	RanAt        time.Time `gorm:"not null;index"`
 
 	TestCase TestCase `gorm:"foreignKey:TestCaseID;references:ID;constraint:OnDelete:CASCADE;"`

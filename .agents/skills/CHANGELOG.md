@@ -7,6 +7,17 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-28
+
+### Added
+- Granular negative test case generation (DEV-16) to generate separate negative test cases by omitting one required parameter or field at a time while keeping others valid.
+- Unit tests verifying edge-cases (DEV-17): `TestGenerator_EmptyEndpoint`, `TestGenerator_MalformedParametersJSON`, `TestGenerator_MalformedRequestSchemaJSON`, `TestGenerator_GranularNegative`, `TestGenerator_ComplexSchema` (enums/arrays/nested objects), and `TestGenerator_ExclusiveBounds`.
+
+### Changed
+- Refactored oversized-probe payload generation (DEV-10): replaced 5 MB in-memory string with metadata flags (`IsOversizedProbe` and `OversizedBytes`) to avoid blowing Neon's 512 MB storage limit.
+- Handled error paths in security generator `json.Marshal` calls instead of discarding errors (DEV-14).
+- Preserved `GeneratedAt` timestamp when copying test cases during endpoint deduplication (DEV-11).
+
 ## [0.2.0] - 2026-06-28
 
 ### Added

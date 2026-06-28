@@ -21,12 +21,13 @@ type TestCasePayload struct {
 	QueryParams map[string]string `json:"query_params,omitempty"`
 	PathParams  map[string]string `json:"path_params,omitempty"`
 	Body        interface{}       `json:"body,omitempty"`
-	RawBody     string            `json:"raw_body,omitempty"`
 
 	// Execution metadata flags for security probes
 	OmitAuth         bool `json:"omit_auth,omitempty"`
 	UseOtherUserAuth bool `json:"use_other_user_auth,omitempty"`
 	IsRateLimitProbe bool `json:"is_rate_limit_probe,omitempty"`
+	IsOversizedProbe bool `json:"is_oversized_probe,omitempty"`
+	OversizedBytes   int  `json:"oversized_bytes,omitempty"`
 }
 
 // Generator produces positive, negative, boundary, and security test cases.
@@ -62,12 +63,12 @@ func (g *Generator) Generate(ctx context.Context, endpoint models.Endpoint) ([]m
 	}
 	testCases = append(testCases, posCase)
 
-	// 2. NEGATIVE TEST CASE
-	negCase, err := g.generateNegative(endpoint.ID, params, reqBody)
+	// 2. NEGATIVE TEST CASES
+	negCases, err := g.generateNegative(endpoint.ID, params, reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("generate negative test: %w", err)
+		return nil, fmt.Errorf("generate negative tests: %w", err)
 	}
-	testCases = append(testCases, negCase)
+	testCases = append(testCases, negCases...)
 
 	// 3. BOUNDARY TEST CASES
 	boundaryCases, err := g.generateBoundaries(endpoint.ID, params, reqBody)
@@ -111,30 +112,104 @@ func (g *Generator) generatePositive(endpointID uuid.UUID, params []*openapi3.Pa
 	}, nil
 }
 
-// generateNegative produces an invalid request expected to fail with 4xx.
-func (g *Generator) generateNegative(endpointID uuid.UUID, params []*openapi3.ParameterRef, reqBody openapi3.Content) (models.TestCase, error) {
-	// Generate with invalid types / omitted required params
-	path, query, headers := generateParameters(params, true, "")
-	body := generateRequestBody(reqBody, true, "")
+// generateNegative produces invalid requests expected to fail with 4xx.
+func (g *Generator) generateNegative(endpointID uuid.UUID, params []*openapi3.ParameterRef, reqBody openapi3.Content) ([]models.TestCase, error) {
+	var cases []models.TestCase
 
-	payload := TestCasePayload{
-		Headers:     headers,
-		QueryParams: query,
-		PathParams:  path,
-		Body:        body,
+	// 1. General negative case (invalid types / corrupted structures)
+	{
+		path, query, headers := generateParametersEx(params, true, "", "")
+		body := generateRequestBodyEx(reqBody, true, "", "")
+
+		payload := TestCasePayload{
+			Headers:     headers,
+			QueryParams: query,
+			PathParams:  path,
+			Body:        body,
+		}
+
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+
+		cases = append(cases, models.TestCase{
+			EndpointID:     endpointID,
+			Category:       models.CategoryNegative,
+			PayloadJSON:    payloadBytes,
+			ExpectedStatus: 400,
+		})
 	}
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return models.TestCase{}, err
+	// 2. Omit each required parameter one-by-one, keeping others valid
+	for _, ref := range params {
+		if ref == nil || ref.Value == nil {
+			continue
+		}
+		param := ref.Value
+		if param.Required {
+			path, query, headers := generateParametersEx(params, false, "", param.Name)
+			body := generateRequestBodyEx(reqBody, false, "", "")
+
+			payload := TestCasePayload{
+				Headers:     headers,
+				QueryParams: query,
+				PathParams:  path,
+				Body:        body,
+			}
+
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				return nil, err
+			}
+
+			cases = append(cases, models.TestCase{
+				EndpointID:     endpointID,
+				Category:       models.CategoryNegative,
+				PayloadJSON:    payloadBytes,
+				ExpectedStatus: 400,
+			})
+		}
 	}
 
-	return models.TestCase{
-		EndpointID:     endpointID,
-		Category:       models.CategoryNegative,
-		PayloadJSON:    payloadBytes,
-		ExpectedStatus: 400, // expecting 400/4xx
-	}, nil
+	// 3. Omit each required request body field one-by-one, keeping others valid
+	if len(reqBody) > 0 {
+		mediaType := reqBody.Get("application/json")
+		if mediaType == nil {
+			for _, mt := range reqBody {
+				mediaType = mt
+				break
+			}
+		}
+		if mediaType != nil && mediaType.Schema != nil && mediaType.Schema.Value != nil {
+			schema := mediaType.Schema.Value
+			for _, reqFieldName := range schema.Required {
+				path, query, headers := generateParametersEx(params, false, "", "")
+				body := generateRequestBodyEx(reqBody, true, "", reqFieldName)
+
+				payload := TestCasePayload{
+					Headers:     headers,
+					QueryParams: query,
+					PathParams:  path,
+					Body:        body,
+				}
+
+				payloadBytes, err := json.Marshal(payload)
+				if err != nil {
+					return nil, err
+				}
+
+				cases = append(cases, models.TestCase{
+					EndpointID:     endpointID,
+					Category:       models.CategoryNegative,
+					PayloadJSON:    payloadBytes,
+					ExpectedStatus: 400,
+				})
+			}
+		}
+	}
+
+	return cases, nil
 }
 
 // generateBoundaries scans constraints and generates test cases at/outside limits.
@@ -202,7 +277,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 			Body:        body,
 			OmitAuth:    true,
 		}
-		payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal auth bypass payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -213,7 +291,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		// 2. Authz Boundary (403)
 		payload.OmitAuth = false
 		payload.UseOtherUserAuth = true
-		payloadBytes, _ = json.Marshal(payload)
+		payloadBytes, err = json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal authz boundary payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -240,7 +321,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 			PathParams:  path,
 			Body:        body,
 		}
-		payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal sqli payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -266,7 +350,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 			PathParams:  path,
 			Body:        body,
 		}
-		payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal xss payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -276,18 +363,23 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 	}
 
 	// 5. Oversized Payload Probe (expect 413 or graceful 400)
+	// DEV-10: Store a flag + target size instead of the actual 5MB payload
+	// to avoid blowing Neon's 512MB storage cap. The execution engine
+	// synthesises the body at runtime.
 	{
 		path, query, headers := generateParameters(params, false, "")
-		// Generate 10x max size or 5MB of a raw repeating string
-		oversizedRaw := strings.Repeat("A", 5<<20) // 5MB
 
 		payload := TestCasePayload{
-			Headers:     headers,
-			QueryParams: query,
-			PathParams:  path,
-			RawBody:     oversizedRaw,
+			Headers:          headers,
+			QueryParams:      query,
+			PathParams:       path,
+			IsOversizedProbe: true,
+			OversizedBytes:   5 << 20, // 5MB — execution engine generates body
 		}
-		payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal oversized payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -301,7 +393,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		payload := TestCasePayload{
 			IsRateLimitProbe: true,
 		}
-		payloadBytes, _ := json.Marshal(payload)
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal rate limit payload: %w", err)
+		}
 		cases = append(cases, models.TestCase{
 			EndpointID:     endpointID,
 			Category:       models.CategorySecurity,
@@ -316,6 +411,10 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 // Helpers for value generation based on OpenAPI schemas
 
 func generateParameters(params []*openapi3.ParameterRef, useInvalid bool, boundary string) (map[string]string, map[string]string, map[string]string) {
+	return generateParametersEx(params, useInvalid, boundary, "")
+}
+
+func generateParametersEx(params []*openapi3.ParameterRef, useInvalid bool, boundary string, omitParamName string) (map[string]string, map[string]string, map[string]string) {
 	pathParams := make(map[string]string)
 	queryParams := make(map[string]string)
 	headers := make(map[string]string)
@@ -326,14 +425,23 @@ func generateParameters(params []*openapi3.ParameterRef, useInvalid bool, bounda
 		}
 		param := ref.Value
 
-		// Omit required parameter if simulating invalid request
-		if useInvalid && param.Required {
+		if param.Name == omitParamName {
+			continue
+		}
+
+		// Omit required parameter if simulating invalid request (default behavior when no specific parameter is omitted)
+		if omitParamName == "" && useInvalid && param.Required {
 			continue
 		}
 
 		var valStr string
+		valUseInvalid := useInvalid
+		if omitParamName != "" {
+			valUseInvalid = false
+		}
+
 		if param.Schema != nil && param.Schema.Value != nil {
-			val := generateSchemaValue(param.Schema.Value, useInvalid, boundary)
+			val := generateSchemaValueEx(param.Schema.Value, valUseInvalid, boundary, "")
 			if val != nil {
 				valStr = fmt.Sprintf("%v", val)
 			}
@@ -354,10 +462,13 @@ func generateParameters(params []*openapi3.ParameterRef, useInvalid bool, bounda
 }
 
 func generateRequestBody(content openapi3.Content, useInvalid bool, boundary string) interface{} {
+	return generateRequestBodyEx(content, useInvalid, boundary, "")
+}
+
+func generateRequestBodyEx(content openapi3.Content, useInvalid bool, boundary string, omitFieldName string) interface{} {
 	if len(content) == 0 {
 		return nil
 	}
-	// Prefer application/json
 	mediaType := content.Get("application/json")
 	if mediaType == nil {
 		for _, mt := range content {
@@ -368,10 +479,14 @@ func generateRequestBody(content openapi3.Content, useInvalid bool, boundary str
 	if mediaType == nil || mediaType.Schema == nil || mediaType.Schema.Value == nil {
 		return nil
 	}
-	return generateSchemaValue(mediaType.Schema.Value, useInvalid, boundary)
+	return generateSchemaValueEx(mediaType.Schema.Value, useInvalid, boundary, omitFieldName)
 }
 
 func generateSchemaValue(schema *openapi3.Schema, useInvalid bool, boundary string) interface{} {
+	return generateSchemaValueEx(schema, useInvalid, boundary, "")
+}
+
+func generateSchemaValueEx(schema *openapi3.Schema, useInvalid bool, boundary string, omitFieldName string) interface{} {
 	if schema == nil {
 		return nil
 	}
@@ -385,14 +500,14 @@ func generateSchemaValue(schema *openapi3.Schema, useInvalid bool, boundary stri
 		return generateBooleanValue(schema, useInvalid)
 	}
 	if schemaHasType(schema, "object") {
-		return generateObjectValue(schema, useInvalid, boundary)
+		return generateObjectValueEx(schema, useInvalid, boundary, omitFieldName)
 	}
 	if schemaHasType(schema, "array") {
-		return generateArrayValue(schema, useInvalid, boundary)
+		return generateArrayValueEx(schema, useInvalid, boundary, omitFieldName)
 	}
 
 	if len(schema.Properties) > 0 {
-		return generateObjectValue(schema, useInvalid, boundary)
+		return generateObjectValueEx(schema, useInvalid, boundary, omitFieldName)
 	}
 	return nil
 }
@@ -487,7 +602,11 @@ func generateBooleanValue(schema *openapi3.Schema, useInvalid bool) interface{} 
 }
 
 func generateObjectValue(schema *openapi3.Schema, useInvalid bool, boundary string) interface{} {
-	if useInvalid {
+	return generateObjectValueEx(schema, useInvalid, boundary, "")
+}
+
+func generateObjectValueEx(schema *openapi3.Schema, useInvalid bool, boundary string, omitFieldName string) interface{} {
+	if useInvalid && omitFieldName == "" {
 		// Simulating invalid type or corrupted structure
 		return "invalid_object_type"
 	}
@@ -495,6 +614,10 @@ func generateObjectValue(schema *openapi3.Schema, useInvalid bool, boundary stri
 	obj := make(map[string]interface{})
 	for name, ref := range schema.Properties {
 		if ref.Value == nil {
+			continue
+		}
+
+		if name == omitFieldName {
 			continue
 		}
 
@@ -506,23 +629,29 @@ func generateObjectValue(schema *openapi3.Schema, useInvalid bool, boundary stri
 			}
 		}
 
-		// Omit required field to simulate invalid payload
-		if useInvalid && isRequired {
+		valUseInvalid := useInvalid
+		if omitFieldName != "" {
+			valUseInvalid = false
+		} else if useInvalid && isRequired {
 			continue
 		}
 
-		obj[name] = generateSchemaValue(ref.Value, useInvalid, boundary)
+		obj[name] = generateSchemaValueEx(ref.Value, valUseInvalid, boundary, "")
 	}
 	return obj
 }
 
 func generateArrayValue(schema *openapi3.Schema, useInvalid bool, boundary string) interface{} {
-	if useInvalid {
+	return generateArrayValueEx(schema, useInvalid, boundary, "")
+}
+
+func generateArrayValueEx(schema *openapi3.Schema, useInvalid bool, boundary string, omitFieldName string) interface{} {
+	if useInvalid && omitFieldName == "" {
 		return "invalid_array_type"
 	}
 	var items []interface{}
 	if schema.Items != nil && schema.Items.Value != nil {
-		items = append(items, generateSchemaValue(schema.Items.Value, useInvalid, boundary))
+		items = append(items, generateSchemaValueEx(schema.Items.Value, useInvalid, boundary, omitFieldName))
 	}
 	return items
 }
