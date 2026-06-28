@@ -57,6 +57,8 @@ type Endpoint struct {
 	ParametersJSON     datatypes.JSON `gorm:"type:jsonb;not null"`
 	RequestSchemaJSON  datatypes.JSON `gorm:"type:jsonb;not null"`
 	ResponseSchemaJSON datatypes.JSON `gorm:"type:jsonb;not null"`
+
+	TestCases []TestCase `gorm:"constraint:OnDelete:CASCADE;"`
 }
 
 func (e *Endpoint) BeforeCreate(_ *gorm.DB) error {

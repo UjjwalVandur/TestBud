@@ -14,6 +14,7 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/api"
 	"github.com/UjjwalVandur/TestBud/internal/config"
 	"github.com/UjjwalVandur/TestBud/internal/database"
+	"github.com/UjjwalVandur/TestBud/internal/generator"
 	"github.com/UjjwalVandur/TestBud/internal/parser"
 	"github.com/UjjwalVandur/TestBud/internal/repository"
 	"github.com/UjjwalVandur/TestBud/internal/service"
@@ -36,7 +37,7 @@ func main() {
 
 	schemaRepo := repository.NewGormSchemaRepository(db)
 	userRepo := repository.NewGormUserRepository(db)
-	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo)
+	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo, generator.NewGenerator())
 	router := api.NewRouter(api.RouterDependencies{
 		Logger:        logger,
 		SchemaService: schemaService,

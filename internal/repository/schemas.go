@@ -14,6 +14,8 @@ import (
 type SchemaRepository interface {
 	CreateSchema(ctx context.Context, schema *models.Schema, endpoints []models.Endpoint) error
 	FindByProjectAndHash(ctx context.Context, projectID uuid.UUID, schemaHash string) (*models.Schema, error)
+	FindLatestSchema(ctx context.Context, projectID uuid.UUID) (*models.Schema, error)
+	GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]models.TestCase, error)
 }
 
 type GormSchemaRepository struct {
@@ -57,4 +59,35 @@ func (r *GormSchemaRepository) FindByProjectAndHash(ctx context.Context, project
 		return nil, fmt.Errorf("find schema by project and hash: %w", err)
 	}
 	return &schema, nil
+}
+
+// FindLatestSchema returns the latest uploaded schema for the project,
+// preloading its endpoints to compare hashes during re-upload deduplication.
+func (r *GormSchemaRepository) FindLatestSchema(ctx context.Context, projectID uuid.UUID) (*models.Schema, error) {
+	var schema models.Schema
+	err := r.db.WithContext(ctx).
+		Preload("Endpoints").
+		Where("project_id = ?", projectID).
+		Order("uploaded_at DESC").
+		First(&schema).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find latest schema: %w", err)
+	}
+	return &schema, nil
+}
+
+// GetTestCasesByEndpoint returns all existing test cases for a given endpoint ID.
+// Used to copy test cases for identical endpoints during deduplication.
+func (r *GormSchemaRepository) GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]models.TestCase, error) {
+	var testCases []models.TestCase
+	err := r.db.WithContext(ctx).
+		Where("endpoint_id = ?", endpointID).
+		Find(&testCases).Error
+	if err != nil {
+		return nil, fmt.Errorf("get test cases by endpoint: %w", err)
+	}
+	return testCases, nil
 }

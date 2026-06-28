@@ -7,6 +7,18 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-28
+
+### Added
+- Rule-based deterministic Test Case Generator Engine (`internal/generator`) producing Positive, Negative, Boundary, and Security test cases.
+- Support for type-specific value generators (string, integer, number, boolean, object, array).
+- Boundary constraint generation testing limits and edge-values (inclusive and exclusive bounds).
+- Security probes for Auth Bypass, Authz Boundary, SQL Injection, XSS, Oversized Payload, and Rate Limit check.
+- Endpoint-level deduplication: copies existing test cases from the previous schema's matching endpoint if their `endpoint_hash` is identical.
+- GORM recursive association saves: added `TestCases` array relation to `Endpoint` model so schemas, endpoints, and all nested test cases are persisted recursively in a single transaction.
+- Comprehensive generator unit tests (verifying positive, negative, boundary, and security outputs).
+- Service integration tests verifying copy-on-duplicate endpoint hash and test case persistence.
+
 ## [0.1.1] - 2026-06-28
 
 ### Added
