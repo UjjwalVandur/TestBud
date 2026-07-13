@@ -7,6 +7,22 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-13
+
+### Added
+- Concurrent Execution Engine (`internal/executor`) that runs generated test cases against a live target API via HTTP, with 10s client timeout and full `context.Context` propagation for cancellation.
+- Semaphore-pattern worker pool (`internal/service/executions.go`) capped at 10 concurrent goroutines (Render 512MB RAM hard limit). Results stream to DB as they arrive — no full-buffer.
+- Support for all security probe execution modes: auth bypass (`OmitAuth`), authz boundary (`UseOtherUserAuth` with alt credentials), oversized payload generation, and rate limit probing (100 sequential requests).
+- `POST /api/schemas/:id/executions` endpoint accepting `target_url`, `auth_headers`, and `alt_auth_headers` in JSON body.
+- `ExecutionRepository` with `CreateExecution` (single-insert streaming) and `DeleteOldExecutions` (90-day retention).
+- `GetEndpointsWithTestCases` method on `SchemaRepository` to load endpoints with preloaded test cases for execution dispatch.
+- Daily 90-day execution retention cron job via `robfig/cron/v3` (schedule: `0 2 * * *`), with graceful shutdown integration.
+- Comprehensive executor unit tests (7 tests): path/query/header construction, auth omit, alt auth, oversized probe, rate limit probe, context cancellation, POST with body.
+- Execution service tests (5 tests): full run, concurrency cap verification, empty schema, context cancellation, mixed pass/fail aggregation.
+
+### Fixed
+- Worker pool deadlock: moved dispatch loop into a separate goroutine so the collector can drain `resultsCh` concurrently, preventing deadlock when the buffered channel fills.
+
 ## [0.2.1] - 2026-06-28
 
 ### Added

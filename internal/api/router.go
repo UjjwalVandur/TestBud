@@ -11,9 +11,10 @@ import (
 // RouterDependencies uses interfaces so the router is testable without concrete
 // service/repository implementations (DEV-1 fix).
 type RouterDependencies struct {
-	Logger        *logrus.Logger
-	SchemaService handlers.SchemaUploader
-	UserLookup    middleware.UserLookup
+	Logger           *logrus.Logger
+	SchemaService    handlers.SchemaUploader
+	ExecutionService handlers.SchemaTestExecutor
+	UserLookup       middleware.UserLookup
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -27,9 +28,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	router.GET("/health", healthHandler.Check)
 
 	schemaHandler := handlers.NewSchemaHandler(deps.SchemaService)
+	executionHandler := handlers.NewExecutionHandler(deps.ExecutionService)
 	api := router.Group("/api")
 	api.Use(middleware.APIKeyAuth(deps.UserLookup))
 	api.POST("/schemas", schemaHandler.Upload)
+	api.POST("/schemas/:id/executions", executionHandler.Execute)
 
 	return router
 }

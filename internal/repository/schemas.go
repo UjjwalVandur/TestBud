@@ -16,6 +16,7 @@ type SchemaRepository interface {
 	FindByProjectAndHash(ctx context.Context, projectID uuid.UUID, schemaHash string) (*models.Schema, error)
 	FindLatestSchema(ctx context.Context, projectID uuid.UUID) (*models.Schema, error)
 	GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]models.TestCase, error)
+	GetEndpointsWithTestCases(ctx context.Context, schemaID uuid.UUID) ([]models.Endpoint, error)
 }
 
 type GormSchemaRepository struct {
@@ -90,4 +91,18 @@ func (r *GormSchemaRepository) GetTestCasesByEndpoint(ctx context.Context, endpo
 		return nil, fmt.Errorf("get test cases by endpoint: %w", err)
 	}
 	return testCases, nil
+}
+
+// GetEndpointsWithTestCases returns all endpoints for a schema, preloading
+// their test cases. Used by the execution engine to dispatch test runs.
+func (r *GormSchemaRepository) GetEndpointsWithTestCases(ctx context.Context, schemaID uuid.UUID) ([]models.Endpoint, error) {
+	var endpoints []models.Endpoint
+	err := r.db.WithContext(ctx).
+		Preload("TestCases").
+		Where("schema_id = ?", schemaID).
+		Find(&endpoints).Error
+	if err != nil {
+		return nil, fmt.Errorf("get endpoints with test cases: %w", err)
+	}
+	return endpoints, nil
 }

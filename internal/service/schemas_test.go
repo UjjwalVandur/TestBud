@@ -69,6 +69,10 @@ func (f *fakeRepo) GetTestCasesByEndpoint(_ context.Context, _ uuid.UUID) ([]mod
 	return f.testCases, f.casesErr
 }
 
+func (f *fakeRepo) GetEndpointsWithTestCases(_ context.Context, _ uuid.UUID) ([]models.Endpoint, error) {
+	return nil, nil
+}
+
 func TestSchemaServiceUploadSchema(t *testing.T) {
 	projectID := uuid.New()
 	uploadedBy := uuid.New()
