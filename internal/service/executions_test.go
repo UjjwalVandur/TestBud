@@ -12,27 +12,17 @@ import (
 
 	"github.com/UjjwalVandur/TestBud/internal/executor"
 	"github.com/UjjwalVandur/TestBud/internal/models"
+	"github.com/UjjwalVandur/TestBud/internal/repository"
 )
 
 // --- Fake SchemaRepository for execution tests ---
 
 type fakeExecSchemaRepo struct {
+	repository.SchemaRepository
 	endpoints []models.Endpoint
 	err       error
 }
 
-func (f *fakeExecSchemaRepo) CreateSchema(context.Context, *models.Schema, []models.Endpoint) error {
-	return nil
-}
-func (f *fakeExecSchemaRepo) FindByProjectAndHash(context.Context, uuid.UUID, string) (*models.Schema, error) {
-	return nil, nil
-}
-func (f *fakeExecSchemaRepo) FindLatestSchema(context.Context, uuid.UUID) (*models.Schema, error) {
-	return nil, nil
-}
-func (f *fakeExecSchemaRepo) GetTestCasesByEndpoint(context.Context, uuid.UUID) ([]models.TestCase, error) {
-	return nil, nil
-}
 func (f *fakeExecSchemaRepo) GetEndpointsWithTestCases(_ context.Context, _ uuid.UUID) ([]models.Endpoint, error) {
 	return f.endpoints, f.err
 }
@@ -40,6 +30,7 @@ func (f *fakeExecSchemaRepo) GetEndpointsWithTestCases(_ context.Context, _ uuid
 // --- Fake ExecutionRepository ---
 
 type fakeExecRepo struct {
+	repository.ExecutionRepository
 	executions []*models.Execution
 	err        error
 }
@@ -52,9 +43,6 @@ func (f *fakeExecRepo) CreateExecution(_ context.Context, exec *models.Execution
 	return nil
 }
 
-func (f *fakeExecRepo) DeleteOldExecutions(_ context.Context, _ time.Time) (int64, error) {
-	return 0, nil
-}
 
 // --- Fake Executor ---
 

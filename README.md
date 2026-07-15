@@ -4,7 +4,7 @@ Automated API Test Case Generator & Execution Platform.
 
 TestBud is a portfolio-grade, production-style platform built entirely on free-tier infrastructure. It parses OpenAPI 3.x / Swagger 2.x schemas, automatically generates positive, negative, boundary, and security test cases, and executes them concurrently against a target live API.
 
-The repository is currently at **Week 3** of the roadmap: **Concurrent Execution Engine**.
+The repository is currently at **Week 4** of the roadmap: **Coverage Analytics**.
 
 ---
 
@@ -15,6 +15,7 @@ The repository is currently at **Week 3** of the roadmap: **Concurrent Execution
 3. **Concurrent Execution Engine**: A worker pool capped at **10 concurrent workers** (Render RAM memory safety ceiling) that pulls test cases and runs them via HTTP client (10s timeout) with full `context.Context` cancellation.
 4. **Deduplication Engine**: Endpoint-level hash matching (`endpoint_hash`). Test cases are regenerated only for new or modified endpoints, minimizing free-tier compute usage.
 5. **Execution Retention Policy**: Daily cron job running at 2:00 AM using `robfig/cron/v3` to clean up execution logs older than 90 days, ensuring Neon's 512MB storage cap is never exceeded.
+6. **Coverage Analyzer**: Computes endpoint coverage %, category coverage breakdown, response code distribution, and field coverage for each schema version.
 
 ---
 
@@ -105,3 +106,19 @@ curl -X POST http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000
 - `target_url` (string, required): The root URL of the target API instance being tested.
 - `auth_headers` (object, optional): Default/valid headers supplied to standard authenticated routes.
 - `alt_auth_headers` (object, optional): Alternative headers supplied to check cross-user authorization boundaries (e.g. User B's token sent to check User A's endpoints to expect `403 Forbidden`).
+
+### 4. Get Coverage Report
+Computes and returns the coverage analytics for the specified schema based on its latest execution results.
+
+```bash
+curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001/coverage \
+  -H "X-API-Key: your_user_api_key"
+```
+
+#### Response JSON:
+- `schema_id` (string): The schema UUID.
+- `endpoint_pct` (number): Percentage of endpoints with at least one executed test case.
+- `categories` (object): Per-category breakdown (`positive`, `negative`, `boundary`, `security`) with `total`, `executed`, and `pct` fields.
+- `response_codes` (object): Frequency distribution of HTTP status codes returned by the target API.
+- `fields` (object): Field coverage with `total`, `covered`, and `pct` — percentage of schema-defined request fields covered by test case payloads.
+- `generated_at` (string): ISO 8601 timestamp of when the report was computed.

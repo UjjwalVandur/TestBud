@@ -122,7 +122,7 @@ func (ex *Execution) BeforeCreate(_ *gorm.DB) error {
 
 type CoverageReport struct {
 	ID           uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	SchemaID     uuid.UUID      `gorm:"type:uuid;not null;index"`
+	SchemaID     uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex"`
 	EndpointPct  float64        `gorm:"type:numeric(5,2);not null"`
 	CategoryJSON datatypes.JSON `gorm:"type:jsonb;not null"`
 	GeneratedAt  time.Time      `gorm:"not null"`

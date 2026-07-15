@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -19,6 +20,10 @@ type ExecutionRepository interface {
 	// DeleteOldExecutions removes executions older than the given timestamp.
 	// Returns the number of rows deleted. Used by the 90-day retention cron.
 	DeleteOldExecutions(ctx context.Context, before time.Time) (int64, error)
+
+	// GetExecutionsByTestCaseIDs loads all executions for the given test case IDs.
+	// Used by coverage computation to determine which test cases were executed.
+	GetExecutionsByTestCaseIDs(ctx context.Context, testCaseIDs []uuid.UUID) ([]models.Execution, error)
 }
 
 // GormExecutionRepository implements ExecutionRepository via GORM.
@@ -48,4 +53,18 @@ func (r *GormExecutionRepository) DeleteOldExecutions(ctx context.Context, befor
 		return 0, fmt.Errorf("delete old executions: %w", result.Error)
 	}
 	return result.RowsAffected, nil
+}
+
+// GetExecutionsByTestCaseIDs loads all executions matching the given test case IDs.
+func (r *GormExecutionRepository) GetExecutionsByTestCaseIDs(ctx context.Context, testCaseIDs []uuid.UUID) ([]models.Execution, error) {
+	if len(testCaseIDs) == 0 {
+		return nil, nil
+	}
+	var executions []models.Execution
+	if err := r.db.WithContext(ctx).
+		Where("test_case_id IN ?", testCaseIDs).
+		Find(&executions).Error; err != nil {
+		return nil, fmt.Errorf("get executions by test case ids: %w", err)
+	}
+	return executions, nil
 }

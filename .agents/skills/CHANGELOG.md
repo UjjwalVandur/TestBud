@@ -7,6 +7,16 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-16
+
+### Added
+- Coverage Analyzer domain engine (`internal/coverage`) computing endpoint coverage %, category coverage breakdown (positive/negative/boundary/security), response code distribution, and field coverage from schema-defined parameters and request body properties.
+- `CoverageRepository` (`internal/repository/coverage.go`) with upsert semantics (one row per schema, updated in-place) and `FindBySchemaID` query.
+- `GetExecutionsByTestCaseIDs` method on `ExecutionRepository` for efficient bulk execution lookup by test case IDs (uses existing `test_case_id` index).
+- `CoverageService` (`internal/service/coverage.go`) orchestrating lazy coverage computation: loads endpoints → test cases → executions, delegates to the analyzer, upserts the report, and returns a JSON-friendly DTO.
+- `GET /api/schemas/:id/coverage` REST endpoint returning the full coverage report with `endpoint_pct`, `categories`, `response_codes`, `fields`, and `generated_at`.
+- Comprehensive tests: 7 analyzer unit tests, 5 service tests with in-package fakes, 3 handler tests.
+
 ## [0.3.0] - 2026-07-13
 
 ### Added
