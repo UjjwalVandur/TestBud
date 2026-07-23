@@ -46,13 +46,15 @@ func main() {
 	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo, generator.NewGenerator())
 	executionService := service.NewExecutionService(schemaRepo, execRepo, executor.NewExecutor(), logger)
 	coverageService := service.NewCoverageService(schemaRepo, execRepo, coverageRepo, logger)
+	regressionService := service.NewRegressionService(schemaRepo, logger)
 
 	router := api.NewRouter(api.RouterDependencies{
-		Logger:           logger,
-		SchemaService:    schemaService,
-		ExecutionService: executionService,
-		CoverageService:  coverageService,
-		UserLookup:       userRepo,
+		Logger:            logger,
+		SchemaService:     schemaService,
+		ExecutionService:  executionService,
+		CoverageService:   coverageService,
+		RegressionService: regressionService,
+		UserLookup:        userRepo,
 	})
 
 	// 90-day execution retention cron — runs daily at 2:00 AM.

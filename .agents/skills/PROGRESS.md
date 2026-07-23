@@ -21,7 +21,7 @@
 | Code Review 2: Fix oversized body, swallowed errors, GeneratedAt, granular negative generation (DEV-10/11/14/16/17) | done | 2026-06-28 |
 | Week 3: Concurrent Execution Engine | done | 2026-07-13 |
 | Week 4: Coverage Analytics | done | 2026-07-16 |
-| Week 5: Regression Detection | not started | - |
+| Week 5: Regression Detection | done | 2026-07-18 |
 | Week 6: Dashboard APIs + Frontend | not started | - |
 | Week 7: CI/CD Automation | not started | - |
 | Week 8: Polish + Demo | not started | - |

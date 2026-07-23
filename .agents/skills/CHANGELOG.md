@@ -7,6 +7,16 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-18
+
+### Added
+- Regression Detector domain engine (`internal/regression`) that diffs two schema versions' endpoint sets, identifying added, removed, and modified endpoints. Uses canonical JSON normalization to prevent false positives from key ordering or whitespace differences.
+- `RegressionService` (`internal/service/regression.go`) coordinating target schema lookup, predecessor discovery via `FindPredecessorSchema`, and diff computation.
+- `GET /api/schemas/:id/regression` REST endpoint returning the full regression report with `base_schema_id`, `target_schema_id`, `added`, `removed`, and `modified` arrays.
+- `FindByID` and `FindPredecessorSchema` methods on `SchemaRepository` for loading schema by UUID and finding the immediate predecessor by project and upload timestamp.
+- Auth-change-aware dedup in schema upload: when an endpoint's `AuthRequired` flag changes but parameters/request/response schemas remain identical, positive/negative/boundary test cases are preserved and only security test cases are regenerated.
+- Comprehensive tests: 10 detector unit tests + 6 canonical JSON tests, 4 service tests, 4 handler tests, 1 auth-change dedup test.
+
 ## [0.4.0] - 2026-07-16
 
 ### Added

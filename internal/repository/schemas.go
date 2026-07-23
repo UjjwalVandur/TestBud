@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -14,7 +15,9 @@ import (
 type SchemaRepository interface {
 	CreateSchema(ctx context.Context, schema *models.Schema, endpoints []models.Endpoint) error
 	FindByProjectAndHash(ctx context.Context, projectID uuid.UUID, schemaHash string) (*models.Schema, error)
+	FindByID(ctx context.Context, id uuid.UUID) (*models.Schema, error)
 	FindLatestSchema(ctx context.Context, projectID uuid.UUID) (*models.Schema, error)
+	FindPredecessorSchema(ctx context.Context, projectID uuid.UUID, currentUploadedAt time.Time) (*models.Schema, error)
 	GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]models.TestCase, error)
 	GetEndpointsWithTestCases(ctx context.Context, schemaID uuid.UUID) ([]models.Endpoint, error)
 }
@@ -105,4 +108,39 @@ func (r *GormSchemaRepository) GetEndpointsWithTestCases(ctx context.Context, sc
 		return nil, fmt.Errorf("get endpoints with test cases: %w", err)
 	}
 	return endpoints, nil
+}
+
+// FindByID returns the schema with the given UUID, preloading its endpoints.
+// Returns nil, nil if not found (consistent with FindByProjectAndHash pattern).
+func (r *GormSchemaRepository) FindByID(ctx context.Context, id uuid.UUID) (*models.Schema, error) {
+	var schema models.Schema
+	err := r.db.WithContext(ctx).
+		Preload("Endpoints").
+		First(&schema, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find schema by id: %w", err)
+	}
+	return &schema, nil
+}
+
+// FindPredecessorSchema returns the schema uploaded immediately before
+// currentUploadedAt for the given project, preloading its endpoints.
+// Returns nil, nil if no predecessor exists.
+func (r *GormSchemaRepository) FindPredecessorSchema(ctx context.Context, projectID uuid.UUID, currentUploadedAt time.Time) (*models.Schema, error) {
+	var schema models.Schema
+	err := r.db.WithContext(ctx).
+		Preload("Endpoints").
+		Where("project_id = ? AND uploaded_at < ?", projectID, currentUploadedAt).
+		Order("uploaded_at DESC").
+		First(&schema).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find predecessor schema: %w", err)
+	}
+	return &schema, nil
 }

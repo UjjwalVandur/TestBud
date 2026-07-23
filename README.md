@@ -4,7 +4,7 @@ Automated API Test Case Generator & Execution Platform.
 
 TestBud is a portfolio-grade, production-style platform built entirely on free-tier infrastructure. It parses OpenAPI 3.x / Swagger 2.x schemas, automatically generates positive, negative, boundary, and security test cases, and executes them concurrently against a target live API.
 
-The repository is currently at **Week 4** of the roadmap: **Coverage Analytics**.
+The repository is currently at **Week 5** of the roadmap: **Regression Detection**.
 
 ---
 
@@ -16,6 +16,7 @@ The repository is currently at **Week 4** of the roadmap: **Coverage Analytics**
 4. **Deduplication Engine**: Endpoint-level hash matching (`endpoint_hash`). Test cases are regenerated only for new or modified endpoints, minimizing free-tier compute usage.
 5. **Execution Retention Policy**: Daily cron job running at 2:00 AM using `robfig/cron/v3` to clean up execution logs older than 90 days, ensuring Neon's 512MB storage cap is never exceeded.
 6. **Coverage Analyzer**: Computes endpoint coverage %, category coverage breakdown, response code distribution, and field coverage for each schema version.
+7. **Regression Detector**: Diffs parsed internal representations between schema versions; flags added, removed, and modified endpoints (parameters, request/response schemas, auth changes). When only `AuthRequired` changes, non-security test cases are preserved and only security cases are regenerated.
 
 ---
 
@@ -122,3 +123,24 @@ curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001/cove
 - `response_codes` (object): Frequency distribution of HTTP status codes returned by the target API.
 - `fields` (object): Field coverage with `total`, `covered`, and `pct` — percentage of schema-defined request fields covered by test case payloads.
 - `generated_at` (string): ISO 8601 timestamp of when the report was computed.
+
+### 5. Get Regression Report
+Computes the diff between the specified schema and its predecessor in the same project.
+
+```bash
+curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001/regression \
+  -H "X-API-Key: your_user_api_key"
+```
+
+#### Response JSON:
+- `base_schema_id` (string): UUID of the predecessor schema (null UUID if first upload).
+- `target_schema_id` (string): UUID of the target schema.
+- `added` (array): Endpoints present in target but absent from the predecessor.
+- `removed` (array): Endpoints present in the predecessor but absent from the target.
+- `modified` (array): Endpoints present in both but with changes. Each entry includes:
+  - `method` (string): HTTP method.
+  - `path` (string): Endpoint path.
+  - `parameters_changed` (bool): Whether parameters differ.
+  - `request_schema_changed` (bool): Whether the request schema differs.
+  - `response_schema_changed` (bool): Whether the response schema differs.
+  - `auth_changed` (bool): Whether the `AuthRequired` flag differs.

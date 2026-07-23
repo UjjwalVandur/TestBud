@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -95,10 +96,13 @@ func (s *SchemaService) UploadSchema(ctx context.Context, input UploadSchemaInpu
 	}
 
 	prevEndpoints := make(map[string]uuid.UUID)
+	prevEndpointsByRoute := make(map[string]models.Endpoint) // Week 5: for auth-change detection
 	if prevSchema != nil {
 		for _, ep := range prevSchema.Endpoints {
 			key := fmt.Sprintf("%s:%s:%s", ep.Method, ep.Path, ep.EndpointHash)
 			prevEndpoints[key] = ep.ID
+			routeKey := fmt.Sprintf("%s:%s", ep.Method, ep.Path)
+			prevEndpointsByRoute[routeKey] = ep
 		}
 	}
 
@@ -121,6 +125,34 @@ func (s *SchemaService) UploadSchema(ctx context.Context, input UploadSchemaInpu
 				}
 			}
 			endpoints[i].TestCases = newCases
+		} else if oldEp, routeExists := prevEndpointsByRoute[fmt.Sprintf("%s:%s", endpoints[i].Method, endpoints[i].Path)]; routeExists && isAuthOnlyChange(oldEp, endpoints[i]) {
+			// Week 5: Auth-only change — copy non-security test cases, regenerate security cases
+			oldCases, err := s.repo.GetTestCasesByEndpoint(ctx, oldEp.ID)
+			if err != nil {
+				return UploadSchemaResult{}, fmt.Errorf("get auth-changed endpoint test cases: %w", err)
+			}
+			var copiedCases []models.TestCase
+			for _, tc := range oldCases {
+				if tc.Category != models.CategorySecurity {
+					copiedCases = append(copiedCases, models.TestCase{
+						Category:       tc.Category,
+						PayloadJSON:    tc.PayloadJSON,
+						ExpectedStatus: tc.ExpectedStatus,
+						GeneratedAt:    tc.GeneratedAt,
+					})
+				}
+			}
+			// Generate fresh security cases for the new auth configuration
+			allNewCases, err := s.generator.Generate(ctx, endpoints[i])
+			if err != nil {
+				return UploadSchemaResult{}, fmt.Errorf("generate security test cases: %w", err)
+			}
+			for _, tc := range allNewCases {
+				if tc.Category == models.CategorySecurity {
+					copiedCases = append(copiedCases, tc)
+				}
+			}
+			endpoints[i].TestCases = copiedCases
 		} else {
 			// Endpoint is new or changed: generate new test cases
 			newCases, err := s.generator.Generate(ctx, endpoints[i])
@@ -180,4 +212,32 @@ func toJSON(raw json.RawMessage) (datatypes.JSON, error) {
 		return nil, fmt.Errorf("invalid json")
 	}
 	return datatypes.JSON(raw), nil
+}
+
+// isAuthOnlyChange returns true when two endpoints at the same Method+Path differ
+// only in AuthRequired — their ParametersJSON, RequestSchemaJSON, and
+// ResponseSchemaJSON are semantically equal. Used during upload dedup to decide
+// whether to regenerate only security test cases (Week 5).
+func isAuthOnlyChange(old, new models.Endpoint) bool {
+	if old.AuthRequired == new.AuthRequired {
+		return false // auth didn't change
+	}
+	return jsonBytesEqual(old.ParametersJSON, new.ParametersJSON) &&
+		jsonBytesEqual(old.RequestSchemaJSON, new.RequestSchemaJSON) &&
+		jsonBytesEqual(old.ResponseSchemaJSON, new.ResponseSchemaJSON)
+}
+
+// jsonBytesEqual compares two JSON byte slices for semantic equality.
+func jsonBytesEqual(a, b []byte) bool {
+	if string(a) == string(b) {
+		return true
+	}
+	var va, vb interface{}
+	if err := json.Unmarshal(a, &va); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(b, &vb); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(va, vb)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -46,6 +47,14 @@ type fakeRepo struct {
 	// testCases is returned by GetTestCasesByEndpoint.
 	testCases []models.TestCase
 	casesErr  error
+
+	// findByIDResult is returned by FindByID.
+	findByIDResult *models.Schema
+	findByIDErr    error
+
+	// predecessorSchema is returned by FindPredecessorSchema.
+	predecessorSchema *models.Schema
+	predecessorErr    error
 }
 
 func (f *fakeRepo) CreateSchema(_ context.Context, schema *models.Schema, endpoints []models.Endpoint) error {
@@ -61,8 +70,16 @@ func (f *fakeRepo) FindByProjectAndHash(_ context.Context, _ uuid.UUID, _ string
 	return f.findResult, f.findErr
 }
 
+func (f *fakeRepo) FindByID(_ context.Context, _ uuid.UUID) (*models.Schema, error) {
+	return f.findByIDResult, f.findByIDErr
+}
+
 func (f *fakeRepo) FindLatestSchema(_ context.Context, _ uuid.UUID) (*models.Schema, error) {
 	return f.latestSchema, f.latestErr
+}
+
+func (f *fakeRepo) FindPredecessorSchema(_ context.Context, _ uuid.UUID, _ time.Time) (*models.Schema, error) {
+	return f.predecessorSchema, f.predecessorErr
 }
 
 func (f *fakeRepo) GetTestCasesByEndpoint(_ context.Context, _ uuid.UUID) ([]models.TestCase, error) {
@@ -291,5 +308,110 @@ func TestSchemaServiceUploadSchema_EndpointDedupCopy(t *testing.T) {
 	}
 	if string(eps.TestCases[0].PayloadJSON) != `{"body":"copied"}` {
 		t.Errorf("expected copied payload, got %s", string(eps.TestCases[0].PayloadJSON))
+	}
+}
+
+func TestSchemaServiceUploadSchema_AuthChangeDedupRegeneratesSecurity(t *testing.T) {
+	projectID := uuid.New()
+	uploadedBy := uuid.New()
+	oldEndpointID := uuid.New()
+
+	// Previous schema: GET /pets with AuthRequired=false
+	repo := &fakeRepo{
+		latestSchema: &models.Schema{
+			ID: uuid.New(),
+			Endpoints: []models.Endpoint{
+				{
+					ID:                 oldEndpointID,
+					Method:             "GET",
+					Path:               "/pets",
+					EndpointHash:       "old-hash",
+					AuthRequired:       false,
+					ParametersJSON:     []byte(`[]`),
+					RequestSchemaJSON:  []byte(`{}`),
+					ResponseSchemaJSON: []byte(`{}`),
+				},
+			},
+		},
+		// Old endpoint has positive + security test cases
+		testCases: []models.TestCase{
+			{
+				Category:       models.CategoryPositive,
+				PayloadJSON:    []byte(`{"body":"positive-copied"}`),
+				ExpectedStatus: 200,
+			},
+			{
+				Category:       models.CategorySecurity,
+				PayloadJSON:    []byte(`{"body":"old-security"}`),
+				ExpectedStatus: 401,
+			},
+		},
+	}
+
+	// New schema: same Method+Path, same params/request/response, but AuthRequired changed to true
+	// EndpointHash will differ because the parser includes AuthRequired in the hash
+	mockParser := fakeParser{
+		parsed: parser.ParsedSchema{
+			OpenAPIVersion: "3.0.3",
+			SchemaHash:     "new-schema-hash",
+			Endpoints: []parser.Endpoint{
+				{
+					Method:             "GET",
+					Path:               "/pets",
+					EndpointHash:       "new-hash-auth-changed",
+					AuthRequired:       true,
+					ParametersJSON:     json.RawMessage(`[]`),
+					RequestSchemaJSON:  json.RawMessage(`{}`),
+					ResponseSchemaJSON: json.RawMessage(`{}`),
+				},
+			},
+		},
+	}
+
+	// Generator returns security cases that should replace old ones
+	gen := &fakeGenerator{
+		cases: []models.TestCase{
+			{Category: models.CategoryPositive, PayloadJSON: []byte(`{"body":"gen-positive"}`), ExpectedStatus: 200},
+			{Category: models.CategorySecurity, PayloadJSON: []byte(`{"body":"new-security"}`), ExpectedStatus: 401},
+		},
+	}
+
+	svc := NewSchemaService(mockParser, repo, gen)
+
+	_, err := svc.UploadSchema(context.Background(), UploadSchemaInput{
+		ProjectID:  projectID,
+		Version:    "2.0.0",
+		UploadedBy: uploadedBy,
+		RawBytes:   []byte(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("UploadSchema() error = %v", err)
+	}
+
+	if len(repo.endpoints) != 1 {
+		t.Fatalf("expected 1 endpoint, got %d", len(repo.endpoints))
+	}
+
+	ep := repo.endpoints[0]
+	// Should have: 1 copied positive + 1 new security = 2 total
+	if len(ep.TestCases) != 2 {
+		t.Fatalf("expected 2 test cases (1 copied positive + 1 new security), got %d", len(ep.TestCases))
+	}
+
+	// Verify the positive case was copied (not regenerated)
+	var foundCopiedPositive, foundNewSecurity bool
+	for _, tc := range ep.TestCases {
+		if tc.Category == models.CategoryPositive && string(tc.PayloadJSON) == `{"body":"positive-copied"}` {
+			foundCopiedPositive = true
+		}
+		if tc.Category == models.CategorySecurity && string(tc.PayloadJSON) == `{"body":"new-security"}` {
+			foundNewSecurity = true
+		}
+	}
+	if !foundCopiedPositive {
+		t.Error("expected positive test case to be copied from old endpoint, but it was not found")
+	}
+	if !foundNewSecurity {
+		t.Error("expected security test case to be freshly generated, but it was not found")
 	}
 }
