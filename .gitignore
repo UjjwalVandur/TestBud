@@ -9,3 +9,7 @@ coverage.out
 
 .DS_Store
 Thumbs.db
+
+# Frontend
+web/node_modules/
+web/.next/

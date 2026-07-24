@@ -13,6 +13,7 @@ type Config struct {
 	Port        string
 	DatabaseURL string
 	AutoMigrate bool
+	CORSOrigins []string
 }
 
 func Load(path string) (Config, error) {
@@ -26,6 +27,7 @@ func Load(path string) (Config, error) {
 	v.SetDefault("APP_ENV", "development")
 	v.SetDefault("PORT", "8080")
 	v.SetDefault("AUTO_MIGRATE", true)
+	v.SetDefault("CORS_ORIGINS", "http://localhost:3000")
 
 	if err := v.ReadInConfig(); err != nil {
 		var cfgNotFound viper.ConfigFileNotFoundError
@@ -40,6 +42,9 @@ func Load(path string) (Config, error) {
 		DatabaseURL: v.GetString("DATABASE_URL"),
 		AutoMigrate: v.GetBool("AUTO_MIGRATE"),
 	}
+
+	cfg.CORSOrigins = v.GetStringSlice("CORS_ORIGINS")
+
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
 	}

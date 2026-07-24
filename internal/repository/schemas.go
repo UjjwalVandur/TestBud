@@ -20,6 +20,8 @@ type SchemaRepository interface {
 	FindPredecessorSchema(ctx context.Context, projectID uuid.UUID, currentUploadedAt time.Time) (*models.Schema, error)
 	GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]models.TestCase, error)
 	GetEndpointsWithTestCases(ctx context.Context, schemaID uuid.UUID) ([]models.Endpoint, error)
+	FindByUploadedBy(ctx context.Context, userID uuid.UUID, projectID uuid.UUID) ([]models.Schema, error)
+	FindByIDWithDetails(ctx context.Context, id uuid.UUID) (*models.Schema, error)
 }
 
 type GormSchemaRepository struct {
@@ -141,6 +143,39 @@ func (r *GormSchemaRepository) FindPredecessorSchema(ctx context.Context, projec
 	}
 	if err != nil {
 		return nil, fmt.Errorf("find predecessor schema: %w", err)
+	}
+	return &schema, nil
+}
+
+// FindByUploadedBy returns all schemas uploaded by the given user, ordered by
+// uploaded_at DESC. If projectID is non-nil, results are filtered to that project.
+// Does not preload endpoints (lightweight listing query for the dashboard).
+func (r *GormSchemaRepository) FindByUploadedBy(ctx context.Context, userID uuid.UUID, projectID uuid.UUID) ([]models.Schema, error) {
+	query := r.db.WithContext(ctx).Where("uploaded_by = ?", userID)
+	if projectID != uuid.Nil {
+		query = query.Where("project_id = ?", projectID)
+	}
+	var schemas []models.Schema
+	if err := query.Order("uploaded_at DESC").Find(&schemas).Error; err != nil {
+		return nil, fmt.Errorf("find schemas by uploaded_by: %w", err)
+	}
+	return schemas, nil
+}
+
+// FindByIDWithDetails returns the schema with the given UUID, preloading
+// endpoints and their nested test cases. Returns nil, nil if not found.
+// Used by the dashboard detail view that needs test case breakdowns.
+func (r *GormSchemaRepository) FindByIDWithDetails(ctx context.Context, id uuid.UUID) (*models.Schema, error) {
+	var schema models.Schema
+	err := r.db.WithContext(ctx).
+		Preload("Endpoints").
+		Preload("Endpoints.TestCases").
+		First(&schema, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find schema by id with details: %w", err)
 	}
 	return &schema, nil
 }

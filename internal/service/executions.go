@@ -149,3 +149,82 @@ func (s *ExecutionService) ExecuteSchemaTests(ctx context.Context, input Execute
 		Failed:   failed,
 	}, nil
 }
+
+// ExecutionItem is a single execution record in the dashboard list view.
+type ExecutionItem struct {
+	ExecutionID    uuid.UUID `json:"execution_id"`
+	TestCaseID     uuid.UUID `json:"test_case_id"`
+	Category       string    `json:"category"`
+	ExpectedStatus int       `json:"expected_status"`
+	ActualStatus   int       `json:"actual_status"`
+	ResponseMs     int64     `json:"response_ms"`
+	Passed         bool      `json:"passed"`
+	RanAt          string    `json:"ran_at"`
+}
+
+// ExecutionSummary provides aggregate statistics for all executions of a schema.
+type ExecutionSummary struct {
+	Total         int     `json:"total"`
+	Passed        int     `json:"passed"`
+	Failed        int     `json:"failed"`
+	AvgResponseMs float64 `json:"avg_response_ms"`
+}
+
+// ExecutionListResult is the full DTO returned by ListExecutions.
+type ExecutionListResult struct {
+	SchemaID   uuid.UUID       `json:"schema_id"`
+	Summary    ExecutionSummary `json:"summary"`
+	Executions []ExecutionItem  `json:"executions"`
+}
+
+// ListExecutions returns all execution records for the given schema with summary stats.
+// Used by the dashboard execution history view.
+func (s *ExecutionService) ListExecutions(ctx context.Context, schemaID uuid.UUID) (*ExecutionListResult, error) {
+	executions, err := s.execRepo.GetExecutionsBySchemaID(ctx, schemaID)
+	if err != nil {
+		return nil, fmt.Errorf("list executions: %w", err)
+	}
+
+	var totalMs int64
+	var passed, failed int
+	items := make([]ExecutionItem, 0, len(executions))
+	for _, ex := range executions {
+		if ex.Passed {
+			passed++
+		} else {
+			failed++
+		}
+		totalMs += ex.ResponseMs
+
+		item := ExecutionItem{
+			ExecutionID:  ex.ID,
+			TestCaseID:   ex.TestCaseID,
+			ActualStatus: ex.ActualStatus,
+			ResponseMs:   ex.ResponseMs,
+			Passed:       ex.Passed,
+			RanAt:        ex.RanAt.UTC().Format("2006-01-02T15:04:05Z"),
+		}
+		// Populate test case context if preloaded.
+		if ex.TestCase.ID != uuid.Nil {
+			item.Category = string(ex.TestCase.Category)
+			item.ExpectedStatus = ex.TestCase.ExpectedStatus
+		}
+		items = append(items, item)
+	}
+
+	var avgMs float64
+	if len(executions) > 0 {
+		avgMs = float64(totalMs) / float64(len(executions))
+	}
+
+	return &ExecutionListResult{
+		SchemaID: schemaID,
+		Summary: ExecutionSummary{
+			Total:         len(executions),
+			Passed:        passed,
+			Failed:        failed,
+			AvgResponseMs: avgMs,
+		},
+		Executions: items,
+	}, nil
+}

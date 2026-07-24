@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -14,16 +15,19 @@ import (
 
 const maxSchemaUploadBytes = 5 << 20
 
-type SchemaUploader interface {
+// SchemaService is the interface the schema handler uses for all operations.
+type SchemaService interface {
 	UploadSchema(ctx context.Context, input service.UploadSchemaInput) (service.UploadSchemaResult, error)
+	ListSchemas(ctx context.Context, userID uuid.UUID, projectID uuid.UUID) ([]service.SchemaListItem, error)
+	GetSchemaDetail(ctx context.Context, schemaID uuid.UUID) (*service.SchemaDetailResult, error)
 }
 
 type SchemaHandler struct {
-	service SchemaUploader
+	service SchemaService
 }
 
-func NewSchemaHandler(service SchemaUploader) *SchemaHandler {
-	return &SchemaHandler{service: service}
+func NewSchemaHandler(svc SchemaService) *SchemaHandler {
+	return &SchemaHandler{service: svc}
 }
 
 func (h *SchemaHandler) Upload(c *gin.Context) {
@@ -90,4 +94,67 @@ func (h *SchemaHandler) Upload(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, result)
+}
+
+// List returns all schemas for the authenticated user.
+// Accepts an optional ?project_id= query parameter to filter by project.
+//
+//	GET /api/schemas
+func (h *SchemaHandler) List(c *gin.Context) {
+	if h.service == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "schema service is not configured"})
+		return
+	}
+
+	userID := middleware.AuthenticatedUserID(c.Request.Context())
+	if userID == uuid.Nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+		return
+	}
+
+	var projectID uuid.UUID
+	if pidStr := c.Query("project_id"); pidStr != "" {
+		parsed, err := uuid.Parse(pidStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "project_id must be a valid UUID"})
+			return
+		}
+		projectID = parsed
+	}
+
+	items, err := h.service.ListSchemas(c.Request.Context(), userID, projectID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, items)
+}
+
+// GetByID returns full schema details including endpoints and test case breakdowns.
+//
+//	GET /api/schemas/:id
+func (h *SchemaHandler) GetByID(c *gin.Context) {
+	if h.service == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "schema service is not configured"})
+		return
+	}
+
+	schemaID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id must be a valid UUID"})
+		return
+	}
+
+	result, err := h.service.GetSchemaDetail(c.Request.Context(), schemaID)
+	if err != nil {
+		if errors.Is(err, service.ErrSchemaNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "schema not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }

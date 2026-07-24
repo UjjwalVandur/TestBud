@@ -12,11 +12,12 @@ import (
 // service/repository implementations (DEV-1 fix).
 type RouterDependencies struct {
 	Logger            *logrus.Logger
-	SchemaService     handlers.SchemaUploader
-	ExecutionService  handlers.SchemaTestExecutor
+	SchemaService     handlers.SchemaService
+	ExecutionService  handlers.ExecutionService
 	CoverageService   handlers.CoverageReporter
 	RegressionService handlers.RegressionReporter
 	UserLookup        middleware.UserLookup
+	CORSOrigins       []string
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -25,6 +26,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(deps.Logger))
+	router.Use(middleware.CORS(deps.CORSOrigins))
 
 	healthHandler := handlers.NewHealthHandler()
 	router.GET("/health", healthHandler.Check)
@@ -35,8 +37,11 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	regressionHandler := handlers.NewRegressionHandler(deps.RegressionService)
 	api := router.Group("/api")
 	api.Use(middleware.APIKeyAuth(deps.UserLookup))
+	api.GET("/schemas", schemaHandler.List)
 	api.POST("/schemas", schemaHandler.Upload)
+	api.GET("/schemas/:id", schemaHandler.GetByID)
 	api.POST("/schemas/:id/executions", executionHandler.Execute)
+	api.GET("/schemas/:id/executions", executionHandler.List)
 	api.GET("/schemas/:id/coverage", coverageHandler.Get)
 	api.GET("/schemas/:id/regression", regressionHandler.Get)
 

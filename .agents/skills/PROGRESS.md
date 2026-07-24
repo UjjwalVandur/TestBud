@@ -22,6 +22,6 @@
 | Week 3: Concurrent Execution Engine | done | 2026-07-13 |
 | Week 4: Coverage Analytics | done | 2026-07-16 |
 | Week 5: Regression Detection | done | 2026-07-18 |
-| Week 6: Dashboard APIs + Frontend | not started | - |
+| Week 6: Dashboard APIs + Frontend | done | 2026-07-23 |
 | Week 7: CI/CD Automation | not started | - |
 | Week 8: Polish + Demo | not started | - |

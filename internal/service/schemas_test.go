@@ -55,6 +55,14 @@ type fakeRepo struct {
 	// predecessorSchema is returned by FindPredecessorSchema.
 	predecessorSchema *models.Schema
 	predecessorErr    error
+
+	// findByUploadedResult is returned by FindByUploadedBy
+	findByUploadedResult []models.Schema
+	findByUploadedErr    error
+
+	// findByIDDetailsResult is returned by FindByIDWithDetails
+	findByIDDetailsResult *models.Schema
+	findByIDDetailsErr    error
 }
 
 func (f *fakeRepo) CreateSchema(_ context.Context, schema *models.Schema, endpoints []models.Endpoint) error {
@@ -87,7 +95,15 @@ func (f *fakeRepo) GetTestCasesByEndpoint(_ context.Context, _ uuid.UUID) ([]mod
 }
 
 func (f *fakeRepo) GetEndpointsWithTestCases(_ context.Context, _ uuid.UUID) ([]models.Endpoint, error) {
-	return nil, nil
+	return f.endpoints, nil
+}
+
+func (f *fakeRepo) FindByUploadedBy(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]models.Schema, error) {
+	return f.findByUploadedResult, f.findByUploadedErr
+}
+
+func (f *fakeRepo) FindByIDWithDetails(_ context.Context, _ uuid.UUID) (*models.Schema, error) {
+	return f.findByIDDetailsResult, f.findByIDDetailsErr
 }
 
 func TestSchemaServiceUploadSchema(t *testing.T) {
@@ -413,5 +429,95 @@ func TestSchemaServiceUploadSchema_AuthChangeDedupRegeneratesSecurity(t *testing
 	}
 	if !foundNewSecurity {
 		t.Error("expected security test case to be freshly generated, but it was not found")
+	}
+}
+
+func TestSchemaServiceListSchemas(t *testing.T) {
+	projectID := uuid.New()
+	userID := uuid.New()
+	schemaID := uuid.New()
+
+	repo := &fakeRepo{
+		findByUploadedResult: []models.Schema{
+			{
+				ID:             schemaID,
+				ProjectID:      projectID,
+				Version:        "1.0.0",
+				OpenAPIVersion: "3.0.3",
+				UploadedAt:     time.Now(),
+			},
+		},
+		endpoints: []models.Endpoint{
+			{ID: uuid.New()},
+			{ID: uuid.New()},
+		}, // returns 2 endpoints for GetEndpointsWithTestCases
+	}
+
+	svc := NewSchemaService(fakeParser{}, repo, &fakeGenerator{})
+	items, err := svc.ListSchemas(context.Background(), userID, projectID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+
+	if items[0].SchemaID != schemaID {
+		t.Errorf("expected schema ID %s, got %s", schemaID, items[0].SchemaID)
+	}
+	if items[0].EndpointCount != 2 {
+		t.Errorf("expected 2 endpoints, got %d", items[0].EndpointCount)
+	}
+}
+
+func TestSchemaServiceGetSchemaDetail(t *testing.T) {
+	schemaID := uuid.New()
+	
+	repo := &fakeRepo{
+		findByIDDetailsResult: &models.Schema{
+			ID:             schemaID,
+			ProjectID:      uuid.New(),
+			Version:        "1.0.0",
+			OpenAPIVersion: "3.0.3",
+			UploadedAt:     time.Now(),
+			Endpoints: []models.Endpoint{
+				{
+					ID:           uuid.New(),
+					Method:       "GET",
+					Path:         "/pets",
+					AuthRequired: true,
+					TestCases: []models.TestCase{
+						{Category: models.CategoryPositive},
+						{Category: models.CategoryPositive},
+						{Category: models.CategoryNegative},
+					},
+				},
+			},
+		},
+	}
+
+	svc := NewSchemaService(fakeParser{}, repo, &fakeGenerator{})
+	detail, err := svc.GetSchemaDetail(context.Background(), schemaID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if detail.SchemaID != schemaID {
+		t.Errorf("expected schema ID %s, got %s", schemaID, detail.SchemaID)
+	}
+	if detail.TotalEndpoints != 1 {
+		t.Errorf("expected 1 endpoint, got %d", detail.TotalEndpoints)
+	}
+	if detail.TotalTestCases != 3 {
+		t.Errorf("expected 3 test cases, got %d", detail.TotalTestCases)
+	}
+
+	ep := detail.Endpoints[0]
+	if ep.TestCounts["positive"] != 2 {
+		t.Errorf("expected 2 positive tests, got %d", ep.TestCounts["positive"])
+	}
+	if ep.TestCounts["negative"] != 1 {
+		t.Errorf("expected 1 negative test, got %d", ep.TestCounts["negative"])
 	}
 }

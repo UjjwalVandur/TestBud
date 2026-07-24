@@ -4,7 +4,7 @@ Automated API Test Case Generator & Execution Platform.
 
 TestBud is a portfolio-grade, production-style platform built entirely on free-tier infrastructure. It parses OpenAPI 3.x / Swagger 2.x schemas, automatically generates positive, negative, boundary, and security test cases, and executes them concurrently against a target live API.
 
-The repository is currently at **Week 5** of the roadmap: **Regression Detection**.
+The repository is currently at **Week 6** of the roadmap: **Dashboard APIs + Frontend**.
 
 ---
 
@@ -17,6 +17,8 @@ The repository is currently at **Week 5** of the roadmap: **Regression Detection
 5. **Execution Retention Policy**: Daily cron job running at 2:00 AM using `robfig/cron/v3` to clean up execution logs older than 90 days, ensuring Neon's 512MB storage cap is never exceeded.
 6. **Coverage Analyzer**: Computes endpoint coverage %, category coverage breakdown, response code distribution, and field coverage for each schema version.
 7. **Regression Detector**: Diffs parsed internal representations between schema versions; flags added, removed, and modified endpoints (parameters, request/response schemas, auth changes). When only `AuthRequired` changes, non-security test cases are preserved and only security cases are regenerated.
+8. **Dashboard APIs**: REST endpoints for schema listing, detail views with test case breakdowns, and execution history with summary statistics.
+9. **Frontend Dashboard**: Next.js 14 + Tailwind CSS single-page application with schema management, execution control, coverage analytics, and regression diff visualization.
 
 ---
 
@@ -144,3 +146,54 @@ curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001/regr
   - `request_schema_changed` (bool): Whether the request schema differs.
   - `response_schema_changed` (bool): Whether the response schema differs.
   - `auth_changed` (bool): Whether the `AuthRequired` flag differs.
+
+### 6. List Schemas
+Returns all schemas uploaded by the authenticated user.
+
+```bash
+curl http://localhost:8080/api/schemas \
+  -H "X-API-Key: your_user_api_key"
+```
+
+Optional query parameter: `?project_id=<UUID>` to filter by project.
+
+### 7. Get Schema Detail
+Returns full schema details with endpoints and per-endpoint test case counts.
+
+```bash
+curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001 \
+  -H "X-API-Key: your_user_api_key"
+```
+
+### 8. List Executions
+Returns execution history with summary statistics for a schema.
+
+```bash
+curl http://localhost:8080/api/schemas/00000000-0000-0000-0000-000000000001/executions \
+  -H "X-API-Key: your_user_api_key"
+```
+
+---
+
+## Frontend Dashboard
+
+The frontend is a Next.js 14 application in the `web/` directory.
+
+### Running the Frontend
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The dashboard runs at `http://localhost:3000` and communicates with the Go backend at `http://localhost:8080`.
+
+Configure your API key via the Settings modal in the top-right corner of the dashboard.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | Backend API base URL |
+

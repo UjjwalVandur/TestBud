@@ -175,6 +175,108 @@ func (s *SchemaService) UploadSchema(ctx context.Context, input UploadSchemaInpu
 	}, nil
 }
 
+// SchemaListItem is the lightweight DTO returned by ListSchemas for the dashboard.
+type SchemaListItem struct {
+	SchemaID       uuid.UUID `json:"schema_id"`
+	ProjectID      uuid.UUID `json:"project_id"`
+	Version        string    `json:"version"`
+	OpenAPIVersion string    `json:"openapi_version"`
+	EndpointCount  int       `json:"endpoint_count"`
+	UploadedAt     string    `json:"uploaded_at"`
+}
+
+// ListSchemas returns all schemas uploaded by the given user, optionally filtered
+// by project. Used by the dashboard schema list view.
+func (s *SchemaService) ListSchemas(ctx context.Context, userID uuid.UUID, projectID uuid.UUID) ([]SchemaListItem, error) {
+	schemas, err := s.repo.FindByUploadedBy(ctx, userID, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list schemas: %w", err)
+	}
+
+	items := make([]SchemaListItem, 0, len(schemas))
+	for _, schema := range schemas {
+		// Use GetEndpointsWithTestCases to count endpoints without loading
+		// full test case bodies — endpoints are lightweight here.
+		endpoints, err := s.repo.GetEndpointsWithTestCases(ctx, schema.ID)
+		if err != nil {
+			return nil, fmt.Errorf("count endpoints for schema %s: %w", schema.ID, err)
+		}
+		items = append(items, SchemaListItem{
+			SchemaID:       schema.ID,
+			ProjectID:      schema.ProjectID,
+			Version:        schema.Version,
+			OpenAPIVersion: schema.OpenAPIVersion,
+			EndpointCount:  len(endpoints),
+			UploadedAt:     schema.UploadedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		})
+	}
+	return items, nil
+}
+
+// EndpointDetail is a DTO for a single endpoint in the schema detail view.
+type EndpointDetail struct {
+	EndpointID   uuid.UUID         `json:"endpoint_id"`
+	Method       string            `json:"method"`
+	Path         string            `json:"path"`
+	AuthRequired bool              `json:"auth_required"`
+	TestCounts   map[string]int    `json:"test_counts"`
+	TotalTests   int               `json:"total_tests"`
+}
+
+// SchemaDetailResult is the full DTO returned by GetSchemaDetail for the detail view.
+type SchemaDetailResult struct {
+	SchemaID       uuid.UUID        `json:"schema_id"`
+	ProjectID      uuid.UUID        `json:"project_id"`
+	Version        string           `json:"version"`
+	OpenAPIVersion string           `json:"openapi_version"`
+	UploadedAt     string           `json:"uploaded_at"`
+	Endpoints      []EndpointDetail `json:"endpoints"`
+	TotalEndpoints int              `json:"total_endpoints"`
+	TotalTestCases int              `json:"total_test_cases"`
+}
+
+// GetSchemaDetail returns full schema details with endpoint and test case breakdowns.
+func (s *SchemaService) GetSchemaDetail(ctx context.Context, schemaID uuid.UUID) (*SchemaDetailResult, error) {
+	schema, err := s.repo.FindByIDWithDetails(ctx, schemaID)
+	if err != nil {
+		return nil, fmt.Errorf("get schema detail: %w", err)
+	}
+	if schema == nil {
+		return nil, ErrSchemaNotFound
+	}
+
+	var totalTestCases int
+	endpoints := make([]EndpointDetail, 0, len(schema.Endpoints))
+	for _, ep := range schema.Endpoints {
+		counts := make(map[string]int)
+		for _, tc := range ep.TestCases {
+			counts[string(tc.Category)]++
+		}
+		total := len(ep.TestCases)
+		totalTestCases += total
+		endpoints = append(endpoints, EndpointDetail{
+			EndpointID:   ep.ID,
+			Method:       ep.Method,
+			Path:         ep.Path,
+			AuthRequired: ep.AuthRequired,
+			TestCounts:   counts,
+			TotalTests:   total,
+		})
+	}
+
+	return &SchemaDetailResult{
+		SchemaID:       schema.ID,
+		ProjectID:      schema.ProjectID,
+		Version:        schema.Version,
+		OpenAPIVersion: schema.OpenAPIVersion,
+		UploadedAt:     schema.UploadedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		Endpoints:      endpoints,
+		TotalEndpoints: len(endpoints),
+		TotalTestCases: totalTestCases,
+	}, nil
+}
+
+
 func toModelEndpoints(endpoints []parser.Endpoint) ([]models.Endpoint, error) {
 	modelEndpoints := make([]models.Endpoint, 0, len(endpoints))
 	for _, endpoint := range endpoints {

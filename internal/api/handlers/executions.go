@@ -10,18 +10,19 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
-// SchemaTestExecutor is the interface the handler uses to trigger test runs.
-type SchemaTestExecutor interface {
+// ExecutionService is the interface the execution handler uses for all operations.
+type ExecutionService interface {
 	ExecuteSchemaTests(ctx context.Context, input service.ExecuteSchemaInput) (service.ExecutionRunResult, error)
+	ListExecutions(ctx context.Context, schemaID uuid.UUID) (*service.ExecutionListResult, error)
 }
 
 // ExecutionHandler handles API requests for test execution.
 type ExecutionHandler struct {
-	service SchemaTestExecutor
+	service ExecutionService
 }
 
 // NewExecutionHandler creates a new ExecutionHandler.
-func NewExecutionHandler(svc SchemaTestExecutor) *ExecutionHandler {
+func NewExecutionHandler(svc ExecutionService) *ExecutionHandler {
 	return &ExecutionHandler{service: svc}
 }
 
@@ -54,6 +55,30 @@ func (h *ExecutionHandler) Execute(c *gin.Context) {
 		AuthHeaders:    req.AuthHeaders,
 		AltAuthHeaders: req.AltAuthHeaders,
 	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// List returns the execution history for the specified schema.
+//
+//	GET /api/schemas/:id/executions
+func (h *ExecutionHandler) List(c *gin.Context) {
+	if h.service == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "execution service is not configured"})
+		return
+	}
+
+	schemaID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id must be a valid UUID"})
+		return
+	}
+
+	result, err := h.service.ListExecutions(c.Request.Context(), schemaID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

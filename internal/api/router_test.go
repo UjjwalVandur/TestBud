@@ -12,11 +12,19 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
-// stubUploader is a minimal SchemaUploader that always succeeds.
+// stubUploader is a minimal SchemaService that always succeeds.
 type stubUploader struct{}
 
 func (s stubUploader) UploadSchema(_ context.Context, _ service.UploadSchemaInput) (service.UploadSchemaResult, error) {
 	return service.UploadSchemaResult{}, nil
+}
+
+func (s stubUploader) ListSchemas(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]service.SchemaListItem, error) {
+	return nil, nil
+}
+
+func (s stubUploader) GetSchemaDetail(_ context.Context, _ uuid.UUID) (*service.SchemaDetailResult, error) {
+	return nil, nil
 }
 
 // stubLookup is a minimal UserLookup that returns a fixed user ID for any key.
@@ -30,9 +38,9 @@ func (s stubLookup) FindUserIDByAPIKey(_ context.Context, _ string) (uuid.UUID, 
 
 func TestRouterHealthEndpoint(t *testing.T) {
 	r := NewRouter(RouterDependencies{
-		Logger:        logrus.New(),
+		Logger:         logrus.New(),
 		SchemaService: stubUploader{},
-		UserLookup:    stubLookup{userID: uuid.New()},
+		UserLookup:     stubLookup{userID: uuid.New()},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -46,9 +54,9 @@ func TestRouterHealthEndpoint(t *testing.T) {
 
 func TestRouterAPIRoutesRequireAuth(t *testing.T) {
 	r := NewRouter(RouterDependencies{
-		Logger:        logrus.New(),
+		Logger:         logrus.New(),
 		SchemaService: stubUploader{},
-		UserLookup:    stubLookup{userID: uuid.Nil}, // always returns Nil → invalid key
+		UserLookup:     stubLookup{userID: uuid.Nil}, // always returns Nil → invalid key
 	})
 
 	// POST to /api/schemas without API key should get 401.
@@ -64,9 +72,9 @@ func TestRouterAPIRoutesRequireAuth(t *testing.T) {
 func TestRouterRequestLoggerNilLogger(t *testing.T) {
 	// Verify the router doesn't panic with a nil logger.
 	r := NewRouter(RouterDependencies{
-		Logger:        nil,
+		Logger:         nil,
 		SchemaService: stubUploader{},
-		UserLookup:    stubLookup{userID: uuid.New()},
+		UserLookup:     stubLookup{userID: uuid.New()},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)

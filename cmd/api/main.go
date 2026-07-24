@@ -55,6 +55,7 @@ func main() {
 		CoverageService:   coverageService,
 		RegressionService: regressionService,
 		UserLookup:        userRepo,
+		CORSOrigins:       cfg.CORSOrigins,
 	})
 
 	// 90-day execution retention cron — runs daily at 2:00 AM.

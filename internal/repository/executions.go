@@ -24,6 +24,11 @@ type ExecutionRepository interface {
 	// GetExecutionsByTestCaseIDs loads all executions for the given test case IDs.
 	// Used by coverage computation to determine which test cases were executed.
 	GetExecutionsByTestCaseIDs(ctx context.Context, testCaseIDs []uuid.UUID) ([]models.Execution, error)
+
+	// GetExecutionsBySchemaID loads all executions for test cases belonging to
+	// endpoints of the given schema. Preloads TestCase for category context.
+	// Used by the dashboard execution history view.
+	GetExecutionsBySchemaID(ctx context.Context, schemaID uuid.UUID) ([]models.Execution, error)
 }
 
 // GormExecutionRepository implements ExecutionRepository via GORM.
@@ -65,6 +70,23 @@ func (r *GormExecutionRepository) GetExecutionsByTestCaseIDs(ctx context.Context
 		Where("test_case_id IN ?", testCaseIDs).
 		Find(&executions).Error; err != nil {
 		return nil, fmt.Errorf("get executions by test case ids: %w", err)
+	}
+	return executions, nil
+}
+
+// GetExecutionsBySchemaID loads all executions for test cases belonging to
+// endpoints of the given schema. Joins through test_cases → endpoints.
+// Results ordered by ran_at DESC, preloading TestCase for category/status context.
+func (r *GormExecutionRepository) GetExecutionsBySchemaID(ctx context.Context, schemaID uuid.UUID) ([]models.Execution, error) {
+	var executions []models.Execution
+	if err := r.db.WithContext(ctx).
+		Preload("TestCase").
+		Joins("JOIN test_cases ON test_cases.id = executions.test_case_id").
+		Joins("JOIN endpoints ON endpoints.id = test_cases.endpoint_id").
+		Where("endpoints.schema_id = ?", schemaID).
+		Order("executions.ran_at DESC").
+		Find(&executions).Error; err != nil {
+		return nil, fmt.Errorf("get executions by schema id: %w", err)
 	}
 	return executions, nil
 }

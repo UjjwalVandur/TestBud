@@ -17,12 +17,16 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
-type fakeSchemaUploader struct {
-	input service.UploadSchemaInput
-	err   error
+type fakeSchemaService struct {
+	input        service.UploadSchemaInput
+	err          error
+	listResult   []service.SchemaListItem
+	listErr      error
+	detailResult *service.SchemaDetailResult
+	detailErr    error
 }
 
-func (f *fakeSchemaUploader) UploadSchema(_ context.Context, input service.UploadSchemaInput) (service.UploadSchemaResult, error) {
+func (f *fakeSchemaService) UploadSchema(_ context.Context, input service.UploadSchemaInput) (service.UploadSchemaResult, error) {
 	f.input = input
 	if f.err != nil {
 		return service.UploadSchemaResult{}, f.err
@@ -33,6 +37,14 @@ func (f *fakeSchemaUploader) UploadSchema(_ context.Context, input service.Uploa
 		OpenAPIVersion: "3.0.3",
 		EndpointCount:  1,
 	}, nil
+}
+
+func (f *fakeSchemaService) ListSchemas(_ context.Context, _ uuid.UUID, _ uuid.UUID) ([]service.SchemaListItem, error) {
+	return f.listResult, f.listErr
+}
+
+func (f *fakeSchemaService) GetSchemaDetail(_ context.Context, _ uuid.UUID) (*service.SchemaDetailResult, error) {
+	return f.detailResult, f.detailErr
 }
 
 // fakeUserLookup stubs the middleware.UserLookup interface for testing.
@@ -53,7 +65,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 		form       map[string]string
 		fileName   string
 		fileBody   string
-		uploader   *fakeSchemaUploader
+		uploader   *fakeSchemaService
 		apiKey     string
 		userID     uuid.UUID
 		wantStatus int
@@ -66,7 +78,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{"openapi":"3.0.3"}`,
-			uploader:   &fakeSchemaUploader{},
+			uploader:   &fakeSchemaService{},
 			apiKey:     "test-key",
 			userID:     authenticatedUserID,
 			wantStatus: http.StatusCreated,
@@ -77,7 +89,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 				"project_id": projectID.String(),
 				"version":    "1.0.0",
 			},
-			uploader:   &fakeSchemaUploader{},
+			uploader:   &fakeSchemaService{},
 			apiKey:     "test-key",
 			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
@@ -90,7 +102,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{}`,
-			uploader:   &fakeSchemaUploader{},
+			uploader:   &fakeSchemaService{},
 			apiKey:     "test-key",
 			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
@@ -103,7 +115,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{}`,
-			uploader:   &fakeSchemaUploader{err: errors.New("parse failed")},
+			uploader:   &fakeSchemaService{err: errors.New("parse failed")},
 			apiKey:     "test-key",
 			userID:     authenticatedUserID,
 			wantStatus: http.StatusBadRequest,
@@ -116,7 +128,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 			},
 			fileName:   "openapi.json",
 			fileBody:   `{}`,
-			uploader:   &fakeSchemaUploader{},
+			uploader:   &fakeSchemaService{},
 			apiKey:     "",
 			userID:     uuid.Nil,
 			wantStatus: http.StatusUnauthorized,
@@ -190,4 +202,131 @@ func multipartBody(t *testing.T, fields map[string]string, fileName, fileBody st
 	}
 
 	return body, writer.FormDataContentType()
+}
+
+
+func TestSchemaHandlerList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authenticatedUserID := uuid.New()
+	items := []service.SchemaListItem{
+		{SchemaID: uuid.New(), Version: "1.0.0", EndpointCount: 3},
+	}
+
+	tests := []struct {
+		name       string
+		lister     *fakeSchemaService
+		apiKey     string
+		userID     uuid.UUID
+		query      string
+		wantStatus int
+	}{
+		{
+			name:       "success",
+			lister:     &fakeSchemaService{listResult: items},
+			apiKey:     "key",
+			userID:     authenticatedUserID,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "no auth returns 401",
+			lister:     &fakeSchemaService{listResult: items},
+			apiKey:     "",
+			userID:     uuid.Nil,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "invalid project_id query param",
+			lister:     &fakeSchemaService{listResult: items},
+			apiKey:     "key",
+			userID:     authenticatedUserID,
+			query:      "?project_id=bad",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "service error",
+			lister:     &fakeSchemaService{listErr: errors.New("db down")},
+			apiKey:     "key",
+			userID:     authenticatedUserID,
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			lookup := fakeUserLookup{userID: tt.userID}
+			api := router.Group("/api")
+			api.Use(middleware.APIKeyAuth(lookup))
+			api.GET("/schemas", NewSchemaHandler(tt.lister).List)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/schemas"+tt.query, nil)
+			if tt.apiKey != "" {
+				req.Header.Set("X-API-Key", tt.apiKey)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestSchemaHandlerGetByID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	schemaID := uuid.New()
+	authenticatedUserID := uuid.New()
+
+	tests := []struct {
+		name       string
+		id         string
+		lister     *fakeSchemaService
+		wantStatus int
+	}{
+		{
+			name: "success",
+			id:   schemaID.String(),
+			lister: &fakeSchemaService{
+				detailResult: &service.SchemaDetailResult{
+					SchemaID: schemaID,
+					Version:  "1.0.0",
+				},
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid uuid",
+			id:         "not-a-uuid",
+			lister:     &fakeSchemaService{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "not found",
+			id:         schemaID.String(),
+			lister:     &fakeSchemaService{detailErr: service.ErrSchemaNotFound},
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := gin.New()
+			lookup := fakeUserLookup{userID: authenticatedUserID}
+			api := router.Group("/api")
+			api.Use(middleware.APIKeyAuth(lookup))
+			api.GET("/schemas/:id", NewSchemaHandler(tt.lister).GetByID)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/schemas/"+tt.id, nil)
+			req.Header.Set("X-API-Key", "key")
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d, body = %s", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
 }

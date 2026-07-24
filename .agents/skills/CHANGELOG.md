@@ -7,6 +7,34 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-23
+
+### Added
+- Dashboard REST APIs for schema listing and details:
+  - `GET /api/schemas` — list schemas by authenticated user, optional `?project_id=` filter.
+  - `GET /api/schemas/:id` — full schema detail with endpoint list and per-endpoint test case counts by category (positive/negative/boundary/security).
+  - `GET /api/schemas/:id/executions` — execution history with summary stats (total/passed/failed/avg response time) and detailed log.
+- `FindByUploadedBy` and `FindByIDWithDetails` repository queries for the dashboard.
+- `GetExecutionsBySchemaID` repository query joining through endpoints → test_cases → executions.
+- `SchemaListItem`, `SchemaDetailResult`, `EndpointDetail`, `ExecutionListResult`, `ExecutionItem`, `ExecutionSummary` DTOs.
+- CORS middleware (`internal/api/middleware/cors.go`) with configurable origins via `CORS_ORIGINS` env variable.
+- Handler interfaces `SchemaLister` and `ExecutionLister` for testability (matching existing handler interface pattern).
+- 10 new handler unit tests: 4 for schema List, 3 for schema GetByID, 3 for execution List.
+- Next.js 14 frontend (`web/`) with App Router, TypeScript, Tailwind CSS:
+  - Dashboard overview page with KPI cards, quick actions, and recent schemas table.
+  - Schemas list page with card grid, upload modal with drag-and-drop dropzone.
+  - Schema detail page with HTTP method badges, auth indicators, and test case category breakdowns.
+  - Execution history page with trigger modal, pass rate progress bar, and detailed execution log.
+  - Coverage analytics page with endpoint/category/response code/field coverage visualizations.
+  - Regression diff page with added (green), removed (red), and modified (amber) endpoint views.
+  - API key settings modal with localStorage persistence.
+  - Dark theme with glassmorphism design system, micro-animations, and custom scrollbar.
+
+### Changed
+- `RouterDependencies` fields renamed for clarity: `SchemaService` → `SchemaUploader`/`SchemaLister`, `ExecutionService` → `ExecutionExecutor`/`ExecutionLister`.
+- `NewSchemaHandler` and `NewExecutionHandler` constructors now accept separate upload/list interfaces.
+- Added `CORS_ORIGINS` (comma-separated) to config with default `http://localhost:3000`.
+
 ## [0.5.0] - 2026-07-18
 
 ### Added

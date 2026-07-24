@@ -43,6 +43,17 @@ func (f *fakeExecRepo) CreateExecution(_ context.Context, exec *models.Execution
 	return nil
 }
 
+func (f *fakeExecRepo) GetExecutionsBySchemaID(_ context.Context, _ uuid.UUID) ([]models.Execution, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	var res []models.Execution
+	for _, e := range f.executions {
+		res = append(res, *e)
+	}
+	return res, nil
+}
+
 
 // --- Fake Executor ---
 
@@ -136,6 +147,43 @@ func TestExecutionService_RunsAllTestCases(t *testing.T) {
 	}
 	if len(execRepo.executions) != 5 {
 		t.Errorf("expected 5 persisted executions, got %d", len(execRepo.executions))
+	}
+}
+
+func TestExecutionServiceListExecutions(t *testing.T) {
+	schemaID := uuid.New()
+	execRepo := &fakeExecRepo{
+		executions: []*models.Execution{
+			{ID: uuid.New(), TestCaseID: uuid.New(), Passed: true, ResponseMs: 100, RanAt: time.Now()},
+			{ID: uuid.New(), TestCaseID: uuid.New(), Passed: false, ResponseMs: 200, RanAt: time.Now()},
+			{ID: uuid.New(), TestCaseID: uuid.New(), Passed: true, ResponseMs: 150, RanAt: time.Now()},
+		},
+	}
+	svc := NewExecutionService(&fakeExecSchemaRepo{}, execRepo, &fakeTestExecutor{}, logrus.New())
+
+	res, err := svc.ListExecutions(context.Background(), schemaID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.SchemaID != schemaID {
+		t.Errorf("expected schema ID %s, got %s", schemaID, res.SchemaID)
+	}
+
+	if res.Summary.Total != 3 {
+		t.Errorf("expected 3 total executions, got %d", res.Summary.Total)
+	}
+	if res.Summary.Passed != 2 {
+		t.Errorf("expected 2 passed, got %d", res.Summary.Passed)
+	}
+	if res.Summary.Failed != 1 {
+		t.Errorf("expected 1 failed, got %d", res.Summary.Failed)
+	}
+	if res.Summary.AvgResponseMs != 150 {
+		t.Errorf("expected avg response 150, got %f", res.Summary.AvgResponseMs)
+	}
+	if len(res.Executions) != 3 {
+		t.Errorf("expected 3 execution items, got %d", len(res.Executions))
 	}
 }
 
