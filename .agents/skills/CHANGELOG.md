@@ -7,6 +7,19 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-30
+
+### Added
+- CI/CD CLI binary (`cmd/cli/main.go`) for pipeline integration:
+  - 3-step workflow: upload schema → execute tests → fetch detailed results.
+  - Configurable pass rate threshold via `--fail-threshold` (default 100%).
+  - Structured exit codes: 0 (pass), 1 (test failure), 2 (infrastructure error).
+  - Formatted terminal output with summary table and failed tests breakdown.
+  - Flag parsing for all required and optional parameters (api-url, api-key, project-id, version, schema-file, target-url, auth-headers, alt-auth-headers).
+- GitHub Actions workflow template (`.github/workflows/testbud.yml`) demonstrating CI integration.
+- 7 unit tests for CLI: flag validation (required/missing/invalid threshold/custom threshold), output formatting (all pass/some fail/custom threshold pass), and missing flags exit code.
+- CI/CD Integration section in README.md with full usage docs, flag reference, and exit code table.
+
 ## [0.6.0] - 2026-07-23
 
 ### Added

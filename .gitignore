@@ -13,3 +13,6 @@ Thumbs.db
 # Frontend
 web/node_modules/
 web/.next/
+
+# CLI binary
+testbud-cli*

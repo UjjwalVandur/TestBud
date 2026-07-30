@@ -1,0 +1,48 @@
+# TestBud — Automated API Test Execution
+#
+# This workflow uploads your OpenAPI schema to TestBud, executes all
+# generated test cases against a staging target, and blocks the PR if
+# the pass rate drops below the configured threshold.
+#
+# Required secrets:
+#   TESTBUD_API_KEY — your TestBud user API key
+#
+# Required variables:
+#   PROJECT_ID  — UUID of your TestBud project
+#   STAGING_URL — base URL of the staging API to test against
+
+name: TestBud API Tests
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'openapi.yaml'
+      - 'swagger.json'
+
+jobs:
+  testbud:
+    name: Run TestBud Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run TestBud CLI
+        env:
+          TESTBUD_API_KEY: ${{ secrets.TESTBUD_API_KEY }}
+        run: |
+          go run github.com/UjjwalVandur/TestBud/cmd/cli@latest \
+            --api-url "https://testbud.example.com" \
+            --api-key "$TESTBUD_API_KEY" \
+            --project-id "${{ vars.PROJECT_ID }}" \
+            --version "${{ github.sha }}" \
+            --schema-file ./openapi.yaml \
+            --target-url "${{ vars.STAGING_URL }}" \
+            --fail-threshold 100

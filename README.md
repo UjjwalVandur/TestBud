@@ -4,7 +4,7 @@ Automated API Test Case Generator & Execution Platform.
 
 TestBud is a portfolio-grade, production-style platform built entirely on free-tier infrastructure. It parses OpenAPI 3.x / Swagger 2.x schemas, automatically generates positive, negative, boundary, and security test cases, and executes them concurrently against a target live API.
 
-The repository is currently at **Week 6** of the roadmap: **Dashboard APIs + Frontend**.
+The repository is currently at **Week 7** of the roadmap: **CI/CD Automation**.
 
 ---
 
@@ -19,6 +19,7 @@ The repository is currently at **Week 6** of the roadmap: **Dashboard APIs + Fro
 7. **Regression Detector**: Diffs parsed internal representations between schema versions; flags added, removed, and modified endpoints (parameters, request/response schemas, auth changes). When only `AuthRequired` changes, non-security test cases are preserved and only security cases are regenerated.
 8. **Dashboard APIs**: REST endpoints for schema listing, detail views with test case breakdowns, and execution history with summary statistics.
 9. **Frontend Dashboard**: Next.js 14 + Tailwind CSS single-page application with schema management, execution control, coverage analytics, and regression diff visualization.
+10. **CI/CD CLI**: Standalone Go binary (`cmd/cli`) that automates upload → execute → report in a single command, with configurable pass rate thresholds and structured exit codes for pipeline gating.
 
 ---
 
@@ -197,3 +198,54 @@ Configure your API key via the Settings modal in the top-right corner of the das
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8080` | Backend API base URL |
 
+---
+
+## CI/CD Integration
+
+TestBud includes a standalone CLI binary for pipeline automation.
+
+### Build the CLI
+
+```bash
+go build -o testbud-cli ./cmd/cli
+```
+
+### Usage
+
+```bash
+testbud-cli \
+  --api-url https://testbud.example.com \
+  --api-key YOUR_API_KEY \
+  --project-id YOUR_PROJECT_UUID \
+  --version "1.0.0" \
+  --schema-file ./openapi.yaml \
+  --target-url https://staging-api.example.com \
+  --auth-headers '{"Authorization": "Bearer token"}' \
+  --fail-threshold 100
+```
+
+### Flags
+
+| Flag | Required | Description |
+|---|---|---|
+| `--api-url` | Yes | TestBud backend URL |
+| `--api-key` | Yes | User API key |
+| `--project-id` | Yes | Project UUID |
+| `--version` | Yes | Schema version string |
+| `--schema-file` | Yes | Path to OpenAPI/Swagger file |
+| `--target-url` | Yes | Target API base URL |
+| `--auth-headers` | No | JSON string of auth headers |
+| `--alt-auth-headers` | No | JSON string of alt auth headers |
+| `--fail-threshold` | No | Minimum pass rate % (default: 100) |
+
+### Exit Codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Pass rate ≥ threshold |
+| `1` | Pass rate < threshold (blocks pipeline) |
+| `2` | Infrastructure error (bad flags, network, etc.) |
+
+### GitHub Actions Example
+
+See [`.github/workflows/testbud.yml`](.github/workflows/testbud.yml) for a drop-in workflow template.
