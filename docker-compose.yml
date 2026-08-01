@@ -1,0 +1,67 @@
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: testbud
+      POSTGRES_PASSWORD: testbud
+      POSTGRES_DB: testbud
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testbud"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ── Go Backend API ──────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://testbud:testbud@db:5432/testbud?sslmode=disable
+      AUTO_MIGRATE: "true"
+      PORT: "8080"
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Next.js Frontend ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ── Mock Target API (for demo testing) ──────────────────────────
+  mock-target:
+    build:
+      context: .
+      dockerfile: examples/mock-server/Dockerfile
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

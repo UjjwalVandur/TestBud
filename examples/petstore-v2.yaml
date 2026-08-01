@@ -1,0 +1,146 @@
+openapi: "3.0.3"
+info:
+  title: Petstore API (v2)
+  version: "2.0.0"
+  description: |
+    Updated Petstore API for demonstrating TestBud's regression detection.
+    Changes from v1:
+      - ADDED:    PUT /pets/{petId} (update endpoint)
+      - REMOVED:  DELETE /pets/{petId} (no longer supported)
+      - MODIFIED: POST /pets now requires an "age" field
+
+servers:
+  - url: http://localhost:8090
+
+paths:
+  /pets:
+    get:
+      summary: List all pets
+      operationId: listPets
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+
+    post:
+      summary: Create a pet
+      operationId: createPet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - age
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                tag:
+                  type: string
+                age:
+                  type: integer
+                  minimum: 0
+                  maximum: 30
+      responses:
+        "201":
+          description: Pet created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          description: Invalid input
+
+  /pets/{petId}:
+    get:
+      summary: Get a pet by ID
+      operationId: getPetById
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A single pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "404":
+          description: Pet not found
+
+    put:
+      summary: Update a pet
+      operationId: updatePet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - age
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                  minimum: 0
+                  maximum: 30
+      responses:
+        "200":
+          description: Pet updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          description: Invalid input
+
+components:
+  schemas:
+    Pet:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        tag:
+          type: string
+        age:
+          type: integer
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

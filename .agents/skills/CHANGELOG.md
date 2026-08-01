@@ -7,6 +7,26 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-31
+
+### Added
+- Docker containerization with `docker-compose.yml` for 1-command local setup:
+  - PostgreSQL 16, Go backend, Next.js frontend, and mock target API.
+  - Healthcheck-based startup ordering (db → backend → frontend).
+- Database seed script (`cmd/seed/main.go`) that creates a demo user with API key `testbud-demo-key-2026` on startup (idempotent).
+- Mock Petstore API server (`examples/mock-server/main.go`) using Go stdlib:
+  - `GET /pets`, `POST /pets`, `GET /pets/{id}`, `DELETE /pets/{id}` (auth required), `PUT /pets/{id}`.
+  - Produces mixed pass/fail results for realistic test execution demos.
+- Sample OpenAPI specs for demo:
+  - `examples/petstore-v1.yaml` — 4 endpoints with query, path, body params and bearer auth.
+  - `examples/petstore-v2.yaml` — modified spec with added PUT, removed DELETE, and changed POST schema for regression demo.
+- `DEMO.md` — step-by-step 5-minute walkthrough guide for all features.
+- Multi-stage Dockerfiles for backend (`Dockerfile`), frontend (`web/Dockerfile`), and mock server (`examples/mock-server/Dockerfile`).
+- Next.js standalone output mode for Docker deployment.
+
+### Changed
+- README.md updated to v1.0.0 with Docker Quickstart section and Demo reference.
+
 ## [0.7.0] - 2026-07-30
 
 ### Added

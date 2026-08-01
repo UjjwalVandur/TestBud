@@ -24,4 +24,4 @@
 | Week 5: Regression Detection | done | 2026-07-18 |
 | Week 6: Dashboard APIs + Frontend | done | 2026-07-23 |
 | Week 7: CI/CD Automation | done | 2026-07-30 |
-| Week 8: Polish + Demo | not started | - |
+| Week 8: Polish + Demo | done | 2026-07-31 |

@@ -4,7 +4,7 @@ Automated API Test Case Generator & Execution Platform.
 
 TestBud is a portfolio-grade, production-style platform built entirely on free-tier infrastructure. It parses OpenAPI 3.x / Swagger 2.x schemas, automatically generates positive, negative, boundary, and security test cases, and executes them concurrently against a target live API.
 
-The repository is currently at **Week 7** of the roadmap: **CI/CD Automation**.
+The repository is at **v1.0.0** — all 8 weeks of the roadmap are complete.
 
 ---
 
@@ -46,7 +46,37 @@ AUTO_MIGRATE=true
 
 ---
 
-## Running the Platform
+## Docker Quickstart
+
+The fastest way to run the full platform (database + backend + frontend + mock API):
+
+```bash
+docker compose up -d
+```
+
+This starts 4 services:
+
+| Service | URL | Purpose |
+|---|---|---|
+| `db` | `localhost:5432` | PostgreSQL 16 |
+| `backend` | `http://localhost:8080` | Go API server |
+| `frontend` | `http://localhost:3000` | Next.js dashboard |
+| `mock-target` | `http://localhost:8090` | Sample Petstore API |
+
+A demo user is automatically seeded on startup:
+- **API Key:** `testbud-demo-key-2026`
+
+For a full walkthrough of every feature, see [DEMO.md](DEMO.md).
+
+To tear down:
+
+```bash
+docker compose down -v
+```
+
+---
+
+## Running the Platform (Manual)
 
 ### Running Tests
 
@@ -249,3 +279,13 @@ testbud-cli \
 ### GitHub Actions Example
 
 See [`.github/workflows/testbud.yml`](.github/workflows/testbud.yml) for a drop-in workflow template.
+
+---
+
+## Demo
+
+TestBud ships with everything needed for a self-contained demo:
+
+- **Sample schemas:** `examples/petstore-v1.yaml` and `examples/petstore-v2.yaml`
+- **Mock target API:** `examples/mock-server/` (Go stdlib HTTP server)
+- **Step-by-step guide:** [DEMO.md](DEMO.md)
