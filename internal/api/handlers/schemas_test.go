@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/UjjwalVandur/TestBud/internal/api/middleware"
+	"github.com/UjjwalVandur/TestBud/internal/models"
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
@@ -58,6 +59,10 @@ type fakeUserLookup struct {
 
 func (f fakeUserLookup) FindUserIDByAPIKey(_ context.Context, _ string) (uuid.UUID, error) {
 	return f.userID, nil
+}
+
+func (f fakeUserLookup) GetOrCreateUserByClerkID(_ context.Context, _ string, _ string) (*models.User, error) {
+	return &models.User{ID: f.userID}, nil
 }
 
 func TestSchemaHandlerUpload(t *testing.T) {
@@ -146,7 +151,7 @@ func TestSchemaHandlerUpload(t *testing.T) {
 
 			lookup := fakeUserLookup{userID: tt.userID}
 			api := router.Group("/api")
-			api.Use(middleware.APIKeyAuth(lookup))
+			api.Use(middleware.AuthMiddleware(lookup, ""))
 			api.POST("/schemas", NewSchemaHandler(tt.uploader).Upload)
 
 			body, contentType := multipartBody(t, tt.form, tt.fileName, tt.fileBody)
@@ -261,7 +266,7 @@ func TestSchemaHandlerList(t *testing.T) {
 			router := gin.New()
 			lookup := fakeUserLookup{userID: tt.userID}
 			api := router.Group("/api")
-			api.Use(middleware.APIKeyAuth(lookup))
+			api.Use(middleware.AuthMiddleware(lookup, ""))
 			api.GET("/schemas", NewSchemaHandler(tt.lister).List)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/schemas"+tt.query, nil)
@@ -320,7 +325,7 @@ func TestSchemaHandlerGetByID(t *testing.T) {
 			router := gin.New()
 			lookup := fakeUserLookup{userID: authenticatedUserID}
 			api := router.Group("/api")
-			api.Use(middleware.APIKeyAuth(lookup))
+			api.Use(middleware.AuthMiddleware(lookup, ""))
 			api.GET("/schemas/:id", NewSchemaHandler(tt.lister).GetByID)
 
 			req := httptest.NewRequest(http.MethodGet, "/api/schemas/"+tt.id, nil)

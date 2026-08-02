@@ -72,6 +72,7 @@ func main() {
 		RegressionService: regressionService,
 		UserLookup:        userRepo,
 		CORSOrigins:       cfg.CORSOrigins,
+		ClerkSecretKey:    cfg.ClerkSecretKey,
 	})
 
 	// 90-day execution retention cron — runs daily at 2:00 AM.

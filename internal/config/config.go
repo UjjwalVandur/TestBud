@@ -16,6 +16,7 @@ type Config struct {
 	CORSOrigins    []string
 	BedrockRegion  string
 	BedrockModelID string
+	ClerkSecretKey string
 }
 
 func Load(path string) (Config, error) {
@@ -32,6 +33,7 @@ func Load(path string) (Config, error) {
 	v.SetDefault("CORS_ORIGINS", "http://localhost:3000")
 	v.SetDefault("AWS_BEDROCK_REGION", "")
 	v.SetDefault("AWS_BEDROCK_MODEL_ID", "")
+	v.SetDefault("CLERK_SECRET_KEY", "")
 
 	if err := v.ReadInConfig(); err != nil {
 		var cfgNotFound viper.ConfigFileNotFoundError
@@ -47,6 +49,7 @@ func Load(path string) (Config, error) {
 		AutoMigrate:    v.GetBool("AUTO_MIGRATE"),
 		BedrockRegion:  v.GetString("AWS_BEDROCK_REGION"),
 		BedrockModelID: v.GetString("AWS_BEDROCK_MODEL_ID"),
+		ClerkSecretKey: v.GetString("CLERK_SECRET_KEY"),
 	}
 
 	cfg.CORSOrigins = v.GetStringSlice("CORS_ORIGINS")

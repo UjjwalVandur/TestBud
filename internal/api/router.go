@@ -18,6 +18,7 @@ type RouterDependencies struct {
 	RegressionService handlers.RegressionReporter
 	UserLookup        middleware.UserLookup
 	CORSOrigins       []string
+	ClerkSecretKey    string
 }
 
 func NewRouter(deps RouterDependencies) *gin.Engine {
@@ -36,7 +37,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	coverageHandler := handlers.NewCoverageHandler(deps.CoverageService)
 	regressionHandler := handlers.NewRegressionHandler(deps.RegressionService)
 	api := router.Group("/api")
-	api.Use(middleware.APIKeyAuth(deps.UserLookup))
+	api.Use(middleware.AuthMiddleware(deps.UserLookup, deps.ClerkSecretKey))
 	api.GET("/schemas", schemaHandler.List)
 	api.POST("/schemas", schemaHandler.Upload)
 	api.GET("/schemas/:id", schemaHandler.GetByID)

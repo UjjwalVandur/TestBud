@@ -9,11 +9,11 @@ import (
 )
 
 type User struct {
-	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
-	Email        string    `gorm:"uniqueIndex;not null"`
-	PasswordHash string    `gorm:"not null"`
-	CreatedAt    time.Time `gorm:"not null"`
-	APIKey       string    `gorm:"uniqueIndex;not null"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
+	Email     string    `gorm:"uniqueIndex;not null"`
+	ClerkID   string    `gorm:"uniqueIndex;not null"`
+	CreatedAt time.Time `gorm:"not null"`
+	APIKey    string    `gorm:"uniqueIndex;not null"`
 }
 
 func (u *User) BeforeCreate(_ *gorm.DB) error {

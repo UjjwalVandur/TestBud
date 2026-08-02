@@ -12,7 +12,7 @@ export interface SchemaListItem {
 export interface TestCaseDetail {
   id: string;
   category: string;
-  payload_json: any;
+  payload_json: Record<string, unknown> | null;
   expected_status: number;
 }
 

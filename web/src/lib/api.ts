@@ -12,8 +12,14 @@ import type {
 const BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-function getApiKey(): string {
+async function getToken(): Promise<string> {
   if (typeof window === "undefined") return "";
+  // @ts-expect-error window.Clerk is injected by Next.js ClerkProvider
+  if (window.Clerk?.session) {
+    // @ts-expect-error window.Clerk is injected by Next.js ClerkProvider
+    return await window.Clerk.session.getToken();
+  }
+  // Fallback for CLI/local testing
   return localStorage.getItem("testbud_api_key") ?? "";
 }
 
@@ -21,11 +27,18 @@ async function request<T>(
   path: string,
   opts: RequestInit = {}
 ): Promise<T> {
-  const key = getApiKey();
+  const token = await getToken();
   const headers: Record<string, string> = {
     ...(opts.headers as Record<string, string>),
   };
-  if (key) headers["X-API-Key"] = key;
+  
+  if (token) {
+    if (token.startsWith("tb_")) {
+      headers["X-API-Key"] = token;
+    } else {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
 
   const res = await fetch(`${BASE_URL}${path}`, { ...opts, headers });
   if (!res.ok) {
@@ -61,14 +74,20 @@ export async function uploadSchema(
   version: string,
   file: File
 ): Promise<UploadSchemaResult> {
-  const key = getApiKey();
+  const token = await getToken();
   const form = new FormData();
   form.append("project_id", projectId);
   form.append("version", version);
   form.append("file", file);
 
   const headers: Record<string, string> = {};
-  if (key) headers["X-API-Key"] = key;
+  if (token) {
+    if (token.startsWith("tb_")) {
+      headers["X-API-Key"] = token;
+    } else {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
 
   const res = await fetch(`${BASE_URL}/api/schemas`, {
     method: "POST",

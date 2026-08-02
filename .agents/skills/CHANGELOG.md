@@ -8,9 +8,20 @@ and this project adheres to semantic versioning once releases begin.
 ## [Unreleased]
 
 ### Added
+- **Authentication**: Integrated Clerk for authentication in both the frontend and backend.
+  - Replaced APIKeyAuth middleware with a dual-auth middleware supporting Clerk `Bearer` tokens and CLI `X-API-Key` authentication.
+  - Implemented lazy user provisioning in the backend, automatically linking users by their `ClerkID`.
+  - Upgraded Next.js frontend with `@clerk/nextjs`, added protected routes via `middleware.ts`, and updated the `Header` with login/profile buttons.
+  - Added a new `/settings` dashboard page for users to view and copy their API tokens.
 - **Bruno (.bru) Support**: Added a new parser that can process Bruno API client files. 
   - Supports uploading `.zip` archives containing multiple `.bru` files as well as individual `.bru` files.
   - Features an intelligent schema inferencer that synthesizes OpenAPI schemas from concrete Bruno request bodies and parameters, enabling seamless test case generation.
+
+### Fixed
+- **Docker & Environment Variables**: Added missing Clerk environment variables (`CLERK_SECRET_KEY` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`) to `docker-compose.yml` and `web/Dockerfile` so Clerk initializes correctly in the containerized deployment.
+- **Frontend Build Stability**: Fixed multiple ESLint and TypeScript build issues (e.g., `react-hooks/exhaustive-deps`, removing unsafe `any` types) ensuring `npm run build` passes successfully.
+- Fixed Next.js cascading render warnings (eslint `react-hooks/set-state-in-effect`) in the `/schemas` and `/schemas/[id]/executions` pages.
+- Fixed unused variable and `@ts-ignore` linting errors in the `web` folder.
 
 ## [1.0.0] - 2026-07-31
 

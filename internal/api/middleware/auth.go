@@ -7,6 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/clerk/clerk-sdk-go/v2"
+	"github.com/clerk/clerk-sdk-go/v2/jwt"
+	"github.com/clerk/clerk-sdk-go/v2/user"
+	"github.com/UjjwalVandur/TestBud/internal/models"
 )
 
 type contextKey string
@@ -16,40 +21,66 @@ const userIDKey contextKey = "authenticated_user_id"
 // UserLookup resolves an API key to a user ID. Returns uuid.Nil if not found.
 type UserLookup interface {
 	FindUserIDByAPIKey(ctx context.Context, apiKey string) (uuid.UUID, error)
+	GetOrCreateUserByClerkID(ctx context.Context, clerkID, email string) (*models.User, error)
 }
 
-// APIKeyAuth returns middleware that authenticates requests via the X-API-Key header.
-// Unauthenticated requests receive 401. If the key is not found, 401 is returned.
-func APIKeyAuth(lookup UserLookup) gin.HandlerFunc {
+// AuthMiddleware returns middleware that authenticates requests via X-API-Key or a Clerk JWT.
+func AuthMiddleware(lookup UserLookup, clerkSecret string) gin.HandlerFunc {
+	if clerkSecret != "" {
+		clerk.SetKey(clerkSecret)
+	}
+	
 	return func(c *gin.Context) {
-		key := c.GetHeader("X-API-Key")
-		if key == "" {
-			// Also accept "Bearer <key>" in Authorization header for flexibility.
-			auth := c.GetHeader("Authorization")
-			if after, ok := strings.CutPrefix(auth, "Bearer "); ok {
-				key = after
+		// 1. Try X-API-Key first (for CLI/Programmatic access)
+		apiKey := c.GetHeader("X-API-Key")
+		if apiKey != "" {
+			userID, err := lookup.FindUserIDByAPIKey(c.Request.Context(), apiKey)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "authentication lookup failed"})
+				return
+			}
+			if userID != uuid.Nil {
+				ctx := context.WithValue(c.Request.Context(), userIDKey, userID)
+				c.Request = c.Request.WithContext(ctx)
+				c.Next()
+				return
 			}
 		}
 
-		if key == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing API key"})
+		// 2. Try Clerk Bearer Token (for Web UI)
+		authHeader := c.GetHeader("Authorization")
+		if token, ok := strings.CutPrefix(authHeader, "Bearer "); ok && token != "" && clerkSecret != "" {
+			claims, err := jwt.Verify(c.Request.Context(), &jwt.VerifyParams{
+				Token: token,
+			})
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid clerk token"})
+				return
+			}
+			
+			// Try to get user email from clerk API (lazy sync)
+			clerkUser, err := user.Get(c.Request.Context(), claims.Subject)
+			email := ""
+			if err == nil && len(clerkUser.EmailAddresses) > 0 {
+				email = clerkUser.EmailAddresses[0].EmailAddress
+			} else {
+				email = claims.Subject + "@clerk.testbud.local" // fallback
+			}
+
+			// Get or create user
+			dbUser, err := lookup.GetOrCreateUserByClerkID(c.Request.Context(), claims.Subject, email)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to provision user"})
+				return
+			}
+
+			ctx := context.WithValue(c.Request.Context(), userIDKey, dbUser.ID)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
 			return
 		}
 
-		userID, err := lookup.FindUserIDByAPIKey(c.Request.Context(), key)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "authentication lookup failed"})
-			return
-		}
-		if userID == uuid.Nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
-			return
-		}
-
-		// Store user ID in context for downstream handlers.
-		ctx := context.WithValue(c.Request.Context(), userIDKey, userID)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid authentication credentials"})
 	}
 }
 

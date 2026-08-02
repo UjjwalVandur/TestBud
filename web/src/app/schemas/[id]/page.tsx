@@ -174,7 +174,8 @@ function EndpointRow({ ep, categories }: { ep: EndpointDetail, categories: reado
             <div className="flex flex-col gap-4">
               {testCases.map((tc) => {
                 // Extract description and clean internal flags from the payload
-                const payload = { ...tc.payload_json };
+                const rawPayload = tc.payload_json as Record<string, any>;
+                const payload = { ...(rawPayload || {}) };
                 const description = payload.description || "No description provided";
                 
                 // Delete internal execution flags to keep the UI clean

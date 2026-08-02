@@ -11,8 +11,8 @@ export default function SchemasPage() {
   const [error, setError] = useState("");
   const [showUpload, setShowUpload] = useState(false);
 
-  const refresh = useCallback(() => {
-    setLoading(true);
+  const refresh = useCallback((isInitial = false) => {
+    if (!isInitial) setLoading(true);
     listSchemas()
       .then(setSchemas)
       .catch((e: Error) => setError(e.message))
@@ -20,7 +20,8 @@ export default function SchemasPage() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh(true);
   }, [refresh]);
 
   return (

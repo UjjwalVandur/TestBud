@@ -14,6 +14,7 @@ import (
 // UserRepository defines persistence operations for users.
 type UserRepository interface {
 	FindUserIDByAPIKey(ctx context.Context, apiKey string) (uuid.UUID, error)
+	GetOrCreateUserByClerkID(ctx context.Context, clerkID, email string) (*models.User, error)
 }
 
 // GormUserRepository implements UserRepository via GORM.
@@ -38,4 +39,30 @@ func (r *GormUserRepository) FindUserIDByAPIKey(ctx context.Context, apiKey stri
 		return uuid.Nil, fmt.Errorf("find user by api key: %w", err)
 	}
 	return user.ID, nil
+}
+
+// GetOrCreateUserByClerkID looks up a user by Clerk ID. If not found, it creates one.
+func (r *GormUserRepository) GetOrCreateUserByClerkID(ctx context.Context, clerkID, email string) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).Where("clerk_id = ?", clerkID).First(&user).Error
+	if err == nil {
+		return &user, nil // Found
+	}
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("lookup user by clerk id: %w", err)
+	}
+
+	// Not found, create new user
+	user = models.User{
+		ClerkID: clerkID,
+		Email:   email,
+		APIKey:  "tb_" + uuid.New().String(),
+	}
+
+	if err := r.db.WithContext(ctx).Create(&user).Error; err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	return &user, nil
 }

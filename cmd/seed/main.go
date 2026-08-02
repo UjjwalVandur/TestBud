@@ -20,7 +20,6 @@ import (
 const (
 	demoEmail    = "demo@testbud.local"
 	demoAPIKey   = "testbud-demo-key-2026"
-	demoPassword = "not-a-real-password-hash"
 )
 
 func main() {
@@ -46,10 +45,10 @@ func main() {
 	}
 
 	user := models.User{
-		ID:           uuid.MustParse("00000000-0000-0000-0000-000000000001"),
-		Email:        demoEmail,
-		PasswordHash: demoPassword,
-		CreatedAt:    time.Now().UTC(),
+		ID:        uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		Email:     demoEmail,
+		ClerkID:   "demo_clerk_id",
+		CreatedAt: time.Now().UTC(),
 		APIKey:       demoAPIKey,
 	}
 

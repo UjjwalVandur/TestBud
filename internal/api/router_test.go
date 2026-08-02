@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 
+	"github.com/UjjwalVandur/TestBud/internal/models"
 	"github.com/UjjwalVandur/TestBud/internal/service"
 )
 
@@ -38,6 +39,10 @@ type stubLookup struct {
 
 func (s stubLookup) FindUserIDByAPIKey(_ context.Context, _ string) (uuid.UUID, error) {
 	return s.userID, nil
+}
+
+func (s stubLookup) GetOrCreateUserByClerkID(_ context.Context, _ string, _ string) (*models.User, error) {
+	return &models.User{ID: s.userID}, nil
 }
 
 func TestRouterHealthEndpoint(t *testing.T) {

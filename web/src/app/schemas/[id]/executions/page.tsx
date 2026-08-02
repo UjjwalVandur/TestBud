@@ -21,8 +21,8 @@ export default function ExecutionsPage() {
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<ExecutionRunResult | null>(null);
 
-  function refresh() {
-    setLoading(true);
+  function refresh(isInitial = false) {
+    if (!isInitial) setLoading(true);
     listExecutions(schemaId)
       .then(setData)
       .catch((e: Error) => setError(e.message))
@@ -30,7 +30,8 @@ export default function ExecutionsPage() {
   }
 
   useEffect(() => {
-    refresh();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schemaId]);
 
