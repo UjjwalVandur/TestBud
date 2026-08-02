@@ -47,6 +47,10 @@ func (f *fakeSchemaService) GetSchemaDetail(_ context.Context, _ uuid.UUID) (*se
 	return f.detailResult, f.detailErr
 }
 
+func (f *fakeSchemaService) GetTestCasesByEndpoint(_ context.Context, _ uuid.UUID) ([]service.TestCaseDetail, error) {
+	return nil, nil
+}
+
 // fakeUserLookup stubs the middleware.UserLookup interface for testing.
 type fakeUserLookup struct {
 	userID uuid.UUID

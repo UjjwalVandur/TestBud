@@ -20,6 +20,7 @@ type SchemaService interface {
 	UploadSchema(ctx context.Context, input service.UploadSchemaInput) (service.UploadSchemaResult, error)
 	ListSchemas(ctx context.Context, userID uuid.UUID, projectID uuid.UUID) ([]service.SchemaListItem, error)
 	GetSchemaDetail(ctx context.Context, schemaID uuid.UUID) (*service.SchemaDetailResult, error)
+	GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]service.TestCaseDetail, error)
 }
 
 type SchemaHandler struct {
@@ -152,6 +153,30 @@ func (h *SchemaHandler) GetByID(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "schema not found"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetTestCases returns the generated test cases for a specific endpoint.
+//
+//	GET /api/endpoints/:endpoint_id/testcases
+func (h *SchemaHandler) GetTestCases(c *gin.Context) {
+	if h.service == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "schema service is not configured"})
+		return
+	}
+
+	endpointID, err := uuid.Parse(c.Param("endpoint_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "endpoint_id must be a valid UUID"})
+		return
+	}
+
+	result, err := h.service.GetTestCasesByEndpoint(c.Request.Context(), endpointID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

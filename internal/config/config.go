@@ -9,11 +9,13 @@ import (
 )
 
 type Config struct {
-	AppEnv      string
-	Port        string
-	DatabaseURL string
-	AutoMigrate bool
-	CORSOrigins []string
+	AppEnv         string
+	Port           string
+	DatabaseURL    string
+	AutoMigrate    bool
+	CORSOrigins    []string
+	BedrockRegion  string
+	BedrockModelID string
 }
 
 func Load(path string) (Config, error) {
@@ -28,6 +30,8 @@ func Load(path string) (Config, error) {
 	v.SetDefault("PORT", "8080")
 	v.SetDefault("AUTO_MIGRATE", true)
 	v.SetDefault("CORS_ORIGINS", "http://localhost:3000")
+	v.SetDefault("AWS_BEDROCK_REGION", "")
+	v.SetDefault("AWS_BEDROCK_MODEL_ID", "")
 
 	if err := v.ReadInConfig(); err != nil {
 		var cfgNotFound viper.ConfigFileNotFoundError
@@ -37,10 +41,12 @@ func Load(path string) (Config, error) {
 	}
 
 	cfg := Config{
-		AppEnv:      v.GetString("APP_ENV"),
-		Port:        v.GetString("PORT"),
-		DatabaseURL: v.GetString("DATABASE_URL"),
-		AutoMigrate: v.GetBool("AUTO_MIGRATE"),
+		AppEnv:         v.GetString("APP_ENV"),
+		Port:           v.GetString("PORT"),
+		DatabaseURL:    v.GetString("DATABASE_URL"),
+		AutoMigrate:    v.GetBool("AUTO_MIGRATE"),
+		BedrockRegion:  v.GetString("AWS_BEDROCK_REGION"),
+		BedrockModelID: v.GetString("AWS_BEDROCK_MODEL_ID"),
 	}
 
 	cfg.CORSOrigins = v.GetStringSlice("CORS_ORIGINS")

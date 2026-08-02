@@ -9,6 +9,13 @@ export interface SchemaListItem {
   uploaded_at: string;
 }
 
+export interface TestCaseDetail {
+  id: string;
+  category: string;
+  payload_json: any;
+  expected_status: number;
+}
+
 export interface EndpointDetail {
   endpoint_id: string;
   method: string;

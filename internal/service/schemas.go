@@ -223,6 +223,13 @@ type EndpointDetail struct {
 	TotalTests   int               `json:"total_tests"`
 }
 
+type TestCaseDetail struct {
+	ID             uuid.UUID       `json:"id"`
+	Category       string          `json:"category"`
+	PayloadJSON    json.RawMessage `json:"payload_json"`
+	ExpectedStatus int             `json:"expected_status"`
+}
+
 // SchemaDetailResult is the full DTO returned by GetSchemaDetail for the detail view.
 type SchemaDetailResult struct {
 	SchemaID       uuid.UUID        `json:"schema_id"`
@@ -233,6 +240,25 @@ type SchemaDetailResult struct {
 	Endpoints      []EndpointDetail `json:"endpoints"`
 	TotalEndpoints int              `json:"total_endpoints"`
 	TotalTestCases int              `json:"total_test_cases"`
+}
+
+// GetTestCasesByEndpoint returns the generated test cases for a specific endpoint.
+func (s *SchemaService) GetTestCasesByEndpoint(ctx context.Context, endpointID uuid.UUID) ([]TestCaseDetail, error) {
+	testCases, err := s.repo.GetTestCasesByEndpoint(ctx, endpointID)
+	if err != nil {
+		return nil, fmt.Errorf("get test cases by endpoint: %w", err)
+	}
+
+	result := make([]TestCaseDetail, len(testCases))
+	for i, tc := range testCases {
+		result[i] = TestCaseDetail{
+			ID:             tc.ID,
+			Category:       string(tc.Category),
+			PayloadJSON:    json.RawMessage(tc.PayloadJSON),
+			ExpectedStatus: tc.ExpectedStatus,
+		}
+	}
+	return result, nil
 }
 
 // GetSchemaDetail returns full schema details with endpoint and test case breakdowns.

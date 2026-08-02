@@ -1,11 +1,14 @@
 package parser
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -43,6 +46,17 @@ func (p *Parser) Parse(ctx context.Context, raw []byte) (ParsedSchema, error) {
 		return ParsedSchema{}, fmt.Errorf("schema file is empty")
 	}
 
+	// 1. Check if it's a ZIP archive (Bruno Collection)
+	if len(raw) > 4 && raw[0] == 0x50 && raw[1] == 0x4B && raw[2] == 0x03 && raw[3] == 0x04 {
+		return p.parseZipArchive(raw)
+	}
+
+	// 2. Check if it's a single Bruno file (starts with "meta {")
+	if strings.HasPrefix(strings.TrimSpace(string(raw)), "meta {") {
+		return p.parseSingleBruno(raw)
+	}
+
+	// 3. Fallback to OpenAPI/Swagger
 	doc, err := loadDocument(ctx, raw)
 	if err != nil {
 		return ParsedSchema{}, err
@@ -58,6 +72,67 @@ func (p *Parser) Parse(ctx context.Context, raw []byte) (ParsedSchema, error) {
 
 	return ParsedSchema{
 		OpenAPIVersion: doc.OpenAPI,
+		SchemaHash:     sha256Hex(raw),
+		Endpoints:      endpoints,
+	}, nil
+}
+
+func (p *Parser) parseSingleBruno(raw []byte) (ParsedSchema, error) {
+	blocks, err := parseBruFile(string(raw))
+	if err != nil {
+		return ParsedSchema{}, err
+	}
+	ep, err := bruBlocksToEndpoint(blocks)
+	if err != nil {
+		return ParsedSchema{}, err
+	}
+	return ParsedSchema{
+		OpenAPIVersion: "bruno",
+		SchemaHash:     sha256Hex(raw),
+		Endpoints:      []Endpoint{ep},
+	}, nil
+}
+
+func (p *Parser) parseZipArchive(raw []byte) (ParsedSchema, error) {
+	reader, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return ParsedSchema{}, fmt.Errorf("read zip archive: %w", err)
+	}
+
+	var endpoints []Endpoint
+	for _, f := range reader.File {
+		if !strings.HasSuffix(f.Name, ".bru") || f.FileInfo().IsDir() {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return ParsedSchema{}, fmt.Errorf("open bru file %s: %w", f.Name, err)
+		}
+		
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return ParsedSchema{}, fmt.Errorf("read bru file %s: %w", f.Name, err)
+		}
+
+		blocks, err := parseBruFile(string(content))
+		if err != nil {
+			continue // Skip malformed files
+		}
+		
+		ep, err := bruBlocksToEndpoint(blocks)
+		if err == nil {
+			endpoints = append(endpoints, ep)
+		}
+	}
+
+	if len(endpoints) == 0 {
+		return ParsedSchema{}, fmt.Errorf("zip archive contains no valid .bru files")
+	}
+
+	return ParsedSchema{
+		OpenAPIVersion: "bruno",
 		SchemaHash:     sha256Hex(raw),
 		Endpoints:      endpoints,
 	}, nil

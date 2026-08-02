@@ -1,0 +1,19 @@
+meta {
+  name: Create Pet
+  type: http
+  seq: 2
+}
+post {
+  url: http://mock-target:8090/pets
+  body: json
+  auth: bearer
+}
+auth:bearer {
+  token: secret
+}
+body:json {
+  {
+    "name": "Buddy",
+    "age": 5
+  }
+}

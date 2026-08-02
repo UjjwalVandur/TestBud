@@ -72,10 +72,11 @@ func (e *Endpoint) BeforeCreate(_ *gorm.DB) error {
 type TestCaseCategory string
 
 const (
-	CategoryPositive TestCaseCategory = "positive"
-	CategoryNegative TestCaseCategory = "negative"
-	CategoryBoundary TestCaseCategory = "boundary"
-	CategorySecurity TestCaseCategory = "security"
+	CategoryPositive   TestCaseCategory = "positive"
+	CategoryNegative   TestCaseCategory = "negative"
+	CategoryBoundary   TestCaseCategory = "boundary"
+	CategorySecurity   TestCaseCategory = "security"
+	CategoryAIEnhanced TestCaseCategory = "ai_enhanced"
 )
 
 type TestCase struct {

@@ -87,42 +87,7 @@ export default function SchemaDetailPage() {
         </div>
         <div className="divide-y divide-[var(--border-subtle)]">
           {schema.endpoints.map((ep) => (
-            <div
-              key={ep.endpoint_id}
-              className="px-6 py-4 hover:bg-white/[0.02] transition-colors"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <span
-                  className={`method-badge method-${ep.method.toLowerCase()}`}
-                >
-                  {ep.method}
-                </span>
-                <span className="font-mono text-sm">{ep.path}</span>
-                {ep.auth_required && (
-                  <span className="ml-auto rounded-md bg-[var(--accent-amber)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-wider">
-                    Auth
-                  </span>
-                )}
-              </div>
-
-              {/* Test case category breakdown */}
-              <div className="flex flex-wrap gap-2">
-                {categories.map((cat) => {
-                  const count = ep.test_counts[cat] ?? 0;
-                  return (
-                    <span
-                      key={cat}
-                      className={`cat-${cat} rounded-md px-2.5 py-1 text-xs font-medium`}
-                    >
-                      {cat}: {count}
-                    </span>
-                  );
-                })}
-                <span className="ml-auto text-xs text-[var(--text-muted)]">
-                  {ep.total_tests} total
-                </span>
-              </div>
-            </div>
+            <EndpointRow key={ep.endpoint_id} ep={ep} categories={categories} />
           ))}
         </div>
       </div>
@@ -137,6 +102,116 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
         {label}
       </p>
       <p className="text-xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+import { getTestCasesByEndpoint } from "@/lib/api";
+import type { TestCaseDetail, EndpointDetail } from "@/lib/types";
+
+function EndpointRow({ ep, categories }: { ep: EndpointDetail, categories: readonly string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [testCases, setTestCases] = useState<TestCaseDetail[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggleExpand = async () => {
+    if (!expanded && !testCases) {
+      setLoading(true);
+      try {
+        const data = await getTestCasesByEndpoint(ep.endpoint_id);
+        setTestCases(data);
+      } catch (err) {
+        console.error("Failed to load test cases", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div
+        className="px-6 py-4 hover:bg-white/[0.02] transition-colors cursor-pointer"
+        onClick={toggleExpand}
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <span className={`method-badge method-${ep.method.toLowerCase()}`}>
+            {ep.method}
+          </span>
+          <span className="font-mono text-sm">{ep.path}</span>
+          {ep.auth_required && (
+            <span className="ml-auto rounded-md bg-[var(--accent-amber)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-wider">
+              Auth
+            </span>
+          )}
+        </div>
+
+        {/* Test case category breakdown */}
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => {
+            const count = ep.test_counts[cat] ?? 0;
+            return (
+              <span
+                key={cat}
+                className={`cat-${cat} rounded-md px-2.5 py-1 text-xs font-medium`}
+              >
+                {cat}: {count}
+              </span>
+            );
+          })}
+          <span className="ml-auto text-xs text-[var(--text-muted)]">
+            {ep.total_tests} total {expanded ? "▲" : "▼"}
+          </span>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="bg-black/20 border-t border-[var(--border-subtle)] p-6 overflow-hidden">
+          {loading ? (
+            <div className="text-sm text-[var(--text-muted)] animate-pulse">Loading test cases...</div>
+          ) : testCases && testCases.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              {testCases.map((tc) => {
+                // Extract description and clean internal flags from the payload
+                const payload = { ...tc.payload_json };
+                const description = payload.description || "No description provided";
+                
+                // Delete internal execution flags to keep the UI clean
+                delete payload.description;
+                delete payload.omit_auth;
+                delete payload.use_other_user_auth;
+                delete payload.is_rate_limit_probe;
+                delete payload.is_oversized_probe;
+                delete payload.oversized_bytes;
+
+                return (
+                  <div key={tc.id} className="glass-card p-4 rounded-lg">
+                    <div className="flex items-center justify-between mb-3 border-b border-[var(--border-subtle)] pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`cat-${tc.category} rounded px-2 py-0.5 text-xs font-bold uppercase`}>
+                          {tc.category.replace("_", " ")}
+                        </span>
+                        <span className="text-sm text-[var(--text-secondary)] font-medium">
+                          {description}
+                        </span>
+                      </div>
+                      <div className="text-sm text-[var(--text-secondary)] bg-black/30 px-2 py-1 rounded">
+                        Expects: <span className="font-mono text-white font-bold">{tc.expected_status}</span>
+                      </div>
+                    </div>
+                    <pre className="text-xs text-[var(--text-muted)] overflow-x-auto p-3 bg-black/40 rounded border border-white/5 font-mono">
+                      {JSON.stringify(payload, null, 2)}
+                    </pre>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-sm text-[var(--text-muted)]">No test cases found.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

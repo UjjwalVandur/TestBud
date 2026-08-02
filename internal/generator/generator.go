@@ -21,6 +21,7 @@ type TestCasePayload struct {
 	QueryParams map[string]string `json:"query_params,omitempty"`
 	PathParams  map[string]string `json:"path_params,omitempty"`
 	Body        interface{}       `json:"body,omitempty"`
+	Description string            `json:"description,omitempty"`
 
 	// Execution metadata flags for security probes
 	OmitAuth         bool `json:"omit_auth,omitempty"`
@@ -93,6 +94,7 @@ func (g *Generator) generatePositive(endpointID uuid.UUID, params []*openapi3.Pa
 	body := generateRequestBody(reqBody, false, "")
 
 	payload := TestCasePayload{
+		Description: "Valid payload expected to succeed",
 		Headers:     headers,
 		QueryParams: query,
 		PathParams:  path,
@@ -122,6 +124,7 @@ func (g *Generator) generateNegative(endpointID uuid.UUID, params []*openapi3.Pa
 		body := generateRequestBodyEx(reqBody, true, "", "")
 
 		payload := TestCasePayload{
+			Description: "Invalid data types or corrupted JSON structure",
 			Headers:     headers,
 			QueryParams: query,
 			PathParams:  path,
@@ -152,6 +155,7 @@ func (g *Generator) generateNegative(endpointID uuid.UUID, params []*openapi3.Pa
 			body := generateRequestBodyEx(reqBody, false, "", "")
 
 			payload := TestCasePayload{
+				Description: fmt.Sprintf("Missing required parameter: %s", param.Name),
 				Headers:     headers,
 				QueryParams: query,
 				PathParams:  path,
@@ -188,6 +192,7 @@ func (g *Generator) generateNegative(endpointID uuid.UUID, params []*openapi3.Pa
 				body := generateRequestBodyEx(reqBody, true, "", reqFieldName)
 
 				payload := TestCasePayload{
+					Description: fmt.Sprintf("Missing required body field: %s", reqFieldName),
 					Headers:     headers,
 					QueryParams: query,
 					PathParams:  path,
@@ -234,12 +239,18 @@ func (g *Generator) generateBoundaries(endpointID uuid.UUID, params []*openapi3.
 	}
 
 	for _, b := range boundaries {
+		// Only generate boundary cases if the schema actually defines relevant constraints!
+		if !paramsHaveBoundary(params, b.name) && !reqBodyHasBoundary(reqBody, b.name) {
+			continue
+		}
+
 		path, query, headers := generateParameters(params, false, b.name)
 		body := generateRequestBody(reqBody, false, b.name)
 
 		// Check if any boundary was actually triggered (if values changed from standard positive values)
 		// To keep it simple, we generate cases for all endpoints, but the execution engine will run them.
 		payload := TestCasePayload{
+			Description: fmt.Sprintf("Boundary validation: %s", strings.ReplaceAll(b.name, "_", " ")),
 			Headers:     headers,
 			QueryParams: query,
 			PathParams:  path,
@@ -271,6 +282,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		path, query, headers := generateParameters(params, false, "")
 		body := generateRequestBody(reqBody, false, "")
 		payload := TestCasePayload{
+			Description: "Auth Bypass: Request omitting required authentication token",
 			Headers:     headers,
 			QueryParams: query,
 			PathParams:  path,
@@ -289,6 +301,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		})
 
 		// 2. Authz Boundary (403)
+		payload.Description = "Authz Boundary: Request using an unauthorized user's token"
 		payload.OmitAuth = false
 		payload.UseOtherUserAuth = true
 		payloadBytes, err = json.Marshal(payload)
@@ -316,6 +329,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		body = injectInterface(body, sqlPayload)
 
 		payload := TestCasePayload{
+			Description: "SQL Injection Probe: Injecting payload into parameters and body strings",
 			Headers:     headers,
 			QueryParams: query,
 			PathParams:  path,
@@ -345,6 +359,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		body = injectInterface(body, xssPayload)
 
 		payload := TestCasePayload{
+			Description: "Cross-Site Scripting (XSS) Probe: Injecting script payload",
 			Headers:     headers,
 			QueryParams: query,
 			PathParams:  path,
@@ -370,6 +385,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 		path, query, headers := generateParameters(params, false, "")
 
 		payload := TestCasePayload{
+			Description:      "Oversized Payload Probe: 5MB request body",
 			Headers:          headers,
 			QueryParams:      query,
 			PathParams:       path,
@@ -391,6 +407,7 @@ func (g *Generator) generateSecurity(endpointID uuid.UUID, authRequired bool, pa
 	// 6. Rate Limit Probe (expect 429)
 	{
 		payload := TestCasePayload{
+			Description:      "Rate Limit Probe: Rapid consecutive requests",
 			IsRateLimitProbe: true,
 		}
 		payloadBytes, err := json.Marshal(payload)
@@ -716,6 +733,69 @@ func isExclusiveMax(schema *openapi3.Schema) bool {
 	}
 	if schema.ExclusiveMax.Value != nil {
 		return true
+	}
+	return false
+}
+
+// hasBoundaryConstraint recursively checks if an OpenAPI schema explicitly defines a constraint
+// relevant to the requested boundary test (e.g. MinLength for min_len_below).
+func hasBoundaryConstraint(schema *openapi3.Schema, bName string) bool {
+	if schema == nil {
+		return false
+	}
+	
+	switch bName {
+	case "min_below", "min_exact":
+		if schema.Min != nil {
+			return true
+		}
+	case "max_above", "max_exact":
+		if schema.Max != nil {
+			return true
+		}
+	case "min_len_below", "min_len_exact":
+		if schema.MinLength > 0 {
+			return true
+		}
+	case "max_len_above", "max_len_exact":
+		if schema.MaxLength != nil {
+			return true
+		}
+	}
+
+	if schema.Items != nil && schema.Items.Value != nil {
+		if hasBoundaryConstraint(schema.Items.Value, bName) {
+			return true
+		}
+	}
+
+	for _, prop := range schema.Properties {
+		if prop.Value != nil && hasBoundaryConstraint(prop.Value, bName) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func paramsHaveBoundary(params []*openapi3.ParameterRef, bName string) bool {
+	for _, ref := range params {
+		if ref != nil && ref.Value != nil && ref.Value.Schema != nil && ref.Value.Schema.Value != nil {
+			if hasBoundaryConstraint(ref.Value.Schema.Value, bName) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func reqBodyHasBoundary(reqBody openapi3.Content, bName string) bool {
+	for _, mt := range reqBody {
+		if mt.Schema != nil && mt.Schema.Value != nil {
+			if hasBoundaryConstraint(mt.Schema.Value, bName) {
+				return true
+			}
+		}
 	}
 	return false
 }

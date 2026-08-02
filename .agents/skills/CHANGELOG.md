@@ -7,6 +7,11 @@ and this project adheres to semantic versioning once releases begin.
 
 ## [Unreleased]
 
+### Added
+- **Bruno (.bru) Support**: Added a new parser that can process Bruno API client files. 
+  - Supports uploading `.zip` archives containing multiple `.bru` files as well as individual `.bru` files.
+  - Features an intelligent schema inferencer that synthesizes OpenAPI schemas from concrete Bruno request bodies and parameters, enabling seamless test case generation.
+
 ## [1.0.0] - 2026-07-31
 
 ### Added
@@ -23,6 +28,10 @@ and this project adheres to semantic versioning once releases begin.
 - `DEMO.md` — step-by-step 5-minute walkthrough guide for all features.
 - Multi-stage Dockerfiles for backend (`Dockerfile`), frontend (`web/Dockerfile`), and mock server (`examples/mock-server/Dockerfile`).
 - Next.js standalone output mode for Docker deployment.
+- Optional AI-powered test generation module (`internal/aigenerator`) using Gemma 4 via AWS Bedrock:
+  - `CompositeGenerator` pattern merging rule-based and LLM-generated edge cases under `ai_enhanced` category.
+  - Per-endpoint rate limiting to prevent Bedrock throttling.
+  - Graceful fallback to rule-based cases if Bedrock API is unconfigured or returns an error.
 
 ### Changed
 - README.md updated to v1.0.0 with Docker Quickstart section and Demo reference.

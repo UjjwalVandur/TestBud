@@ -27,6 +27,10 @@ func (s stubUploader) GetSchemaDetail(_ context.Context, _ uuid.UUID) (*service.
 	return nil, nil
 }
 
+func (s stubUploader) GetTestCasesByEndpoint(_ context.Context, _ uuid.UUID) ([]service.TestCaseDetail, error) {
+	return nil, nil
+}
+
 // stubLookup is a minimal UserLookup that returns a fixed user ID for any key.
 type stubLookup struct {
 	userID uuid.UUID

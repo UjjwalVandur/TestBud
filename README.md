@@ -10,7 +10,7 @@ The repository is at **v1.0.0** — all 8 weeks of the roadmap are complete.
 
 ## Architecture & Core Modules
 
-1. **Schema Parser**: Uses `kin-openapi` to validate and normalize OpenAPI/Swagger schemas.
+1. **Schema Parser**: Validates and normalizes **OpenAPI/Swagger** schemas (via `kin-openapi`) and **Bruno API Client files** (`.bru` or `.zip` collections) with an intelligent schema inferencer.
 2. **Test Generator**: A rule-based, deterministic engine generating positive, negative, boundary, and security test cases per endpoint.
 3. **Concurrent Execution Engine**: A worker pool capped at **10 concurrent workers** (Render RAM memory safety ceiling) that pulls test cases and runs them via HTTP client (10s timeout) with full `context.Context` cancellation.
 4. **Deduplication Engine**: Endpoint-level hash matching (`endpoint_hash`). Test cases are regenerated only for new or modified endpoints, minimizing free-tier compute usage.
@@ -20,6 +20,7 @@ The repository is at **v1.0.0** — all 8 weeks of the roadmap are complete.
 8. **Dashboard APIs**: REST endpoints for schema listing, detail views with test case breakdowns, and execution history with summary statistics.
 9. **Frontend Dashboard**: Next.js 14 + Tailwind CSS single-page application with schema management, execution control, coverage analytics, and regression diff visualization.
 10. **CI/CD CLI**: Standalone Go binary (`cmd/cli`) that automates upload → execute → report in a single command, with configurable pass rate thresholds and structured exit codes for pipeline gating.
+11. **AI Test Generator**: Optional LLM-powered test generation module (`internal/aigenerator`) using Gemma 4 via AWS Bedrock. Uses a `CompositeGenerator` pattern to supplement rule-based tests with AI-generated business logic edge cases, featuring automated rate-limiting and graceful degradation.
 
 ---
 

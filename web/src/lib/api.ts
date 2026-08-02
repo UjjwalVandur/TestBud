@@ -6,6 +6,7 @@ import type {
   ExecutionRunResult,
   CoverageReportResult,
   RegressionReport,
+  TestCaseDetail,
 } from "./types";
 
 const BASE_URL =
@@ -119,4 +120,10 @@ export async function getRegression(
   schemaId: string
 ): Promise<RegressionReport> {
   return request(`/api/schemas/${schemaId}/regression`);
+}
+
+export async function getTestCasesByEndpoint(
+  endpointId: string
+): Promise<TestCaseDetail[]> {
+  return request(`/api/endpoints/${endpointId}/testcases`);
 }

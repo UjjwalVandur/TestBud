@@ -12,9 +12,9 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/UjjwalVandur/TestBud/internal/aigenerator"
 	"github.com/UjjwalVandur/TestBud/internal/api"
 	"github.com/UjjwalVandur/TestBud/internal/config"
-
 	"github.com/UjjwalVandur/TestBud/internal/database"
 	"github.com/UjjwalVandur/TestBud/internal/executor"
 	"github.com/UjjwalVandur/TestBud/internal/generator"
@@ -43,7 +43,23 @@ func main() {
 	execRepo := repository.NewGormExecutionRepository(db)
 	coverageRepo := repository.NewGormCoverageRepository(db)
 
-	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo, generator.NewGenerator())
+	ruleGen := generator.NewGenerator()
+	var testGen service.TestCaseGenerator = ruleGen
+
+	if cfg.BedrockRegion != "" && cfg.BedrockModelID != "" {
+		aiGen, err := aigenerator.New(cfg.BedrockRegion, cfg.BedrockModelID, aigenerator.WithLogger(logger))
+		if err != nil {
+			logger.WithError(err).Warn("ai generator init failed, using rule-based only")
+		} else {
+			testGen = generator.NewCompositeGenerator(ruleGen, aiGen, logger)
+			logger.WithFields(logrus.Fields{
+				"region":   cfg.BedrockRegion,
+				"model_id": cfg.BedrockModelID,
+			}).Info("ai-powered test case generation enabled (AWS Bedrock / Gemma 4)")
+		}
+	}
+
+	schemaService := service.NewSchemaService(parser.NewParser(), schemaRepo, testGen)
 	executionService := service.NewExecutionService(schemaRepo, execRepo, executor.NewExecutor(), logger)
 	coverageService := service.NewCoverageService(schemaRepo, execRepo, coverageRepo, logger)
 	regressionService := service.NewRegressionService(schemaRepo, logger)

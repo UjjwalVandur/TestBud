@@ -44,6 +44,7 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	api.GET("/schemas/:id/executions", executionHandler.List)
 	api.GET("/schemas/:id/coverage", coverageHandler.Get)
 	api.GET("/schemas/:id/regression", regressionHandler.Get)
+	api.GET("/endpoints/:endpoint_id/testcases", schemaHandler.GetTestCases)
 
 	return router
 }
