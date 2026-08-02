@@ -14,11 +14,11 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/models"
 )
 
-type mockHTTPClient struct {
+type mockRoundTripper struct {
 	handler func(req *http.Request) (*http.Response, error)
 }
 
-func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m.handler(req)
 }
 
@@ -40,26 +40,27 @@ func TestAIGeneratorSuccess(t *testing.T) {
 		}
 	]`
 
-	client := &mockHTTPClient{
-		handler: func(req *http.Request) (*http.Response, error) {
-			if req.Method != http.MethodPost {
-				t.Errorf("expected POST method, got %s", req.Method)
-			}
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewReader([]byte(mockResponseJSON))),
-			}, nil
+	client := &http.Client{
+		Transport: &mockRoundTripper{
+			handler: func(req *http.Request) (*http.Response, error) {
+				if req.Method != http.MethodPost {
+					t.Errorf("expected POST method, got %s", req.Method)
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte(mockResponseJSON))),
+				}, nil
+			},
 		},
 	}
 
-	gen, err := New("us-east-1", "google.gemma-4-31b",
-		WithHTTPClient(client),
-		WithEndpointURL("http://localhost/mock"),
-		WithRateLimit(1*time.Millisecond),
-	)
+	gen, err := New("us-east-1", "google.gemma-4-31b")
 	if err != nil {
 		t.Fatalf("unexpected error creating generator: %v", err)
 	}
+	gen.httpClient = client
+	gen.endpointURL = "http://localhost/mock"
+	gen.rateLimit = 1 * time.Millisecond
 
 	epID := uuid.New()
 	ep := models.Endpoint{
@@ -93,23 +94,24 @@ func TestAIGeneratorSuccess(t *testing.T) {
 func TestAIGeneratorBedrockEnvelopeParsing(t *testing.T) {
 	mockEnvelope := `{"output_text": "[{\"description\": \"Test\", \"expected_status\": 422, \"payload\": {\"body\": {}}}]"}`
 
-	client := &mockHTTPClient{
-		handler: func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       io.NopCloser(bytes.NewReader([]byte(mockEnvelope))),
-			}, nil
+	client := &http.Client{
+		Transport: &mockRoundTripper{
+			handler: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte(mockEnvelope))),
+				}, nil
+			},
 		},
 	}
 
-	gen, err := New("us-east-1", "google.gemma-4-31b",
-		WithHTTPClient(client),
-		WithEndpointURL("http://localhost/mock"),
-		WithRateLimit(1*time.Millisecond),
-	)
+	gen, err := New("us-east-1", "google.gemma-4-31b")
 	if err != nil {
 		t.Fatalf("failed to create generator: %v", err)
 	}
+	gen.httpClient = client
+	gen.endpointURL = "http://localhost/mock"
+	gen.rateLimit = 1 * time.Millisecond
 
 	cases, err := gen.Generate(context.Background(), models.Endpoint{ID: uuid.New()})
 	if err != nil {
@@ -125,23 +127,24 @@ func TestAIGeneratorBedrockEnvelopeParsing(t *testing.T) {
 }
 
 func TestAIGeneratorGracefulDegradationOnAPIError(t *testing.T) {
-	client := &mockHTTPClient{
-		handler: func(req *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusInternalServerError,
-				Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":"internal error"}`))),
-			}, nil
+	client := &http.Client{
+		Transport: &mockRoundTripper{
+			handler: func(req *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusInternalServerError,
+					Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":"internal error"}`))),
+				}, nil
+			},
 		},
 	}
 
-	gen, err := New("us-east-1", "google.gemma-4-31b",
-		WithHTTPClient(client),
-		WithEndpointURL("http://localhost/mock"),
-		WithRateLimit(1*time.Millisecond),
-	)
+	gen, err := New("us-east-1", "google.gemma-4-31b")
 	if err != nil {
 		t.Fatalf("failed to create generator: %v", err)
 	}
+	gen.httpClient = client
+	gen.endpointURL = "http://localhost/mock"
+	gen.rateLimit = 1 * time.Millisecond
 
 	// Should not return an error, but return an empty slice (graceful degradation)
 	cases, err := gen.Generate(context.Background(), models.Endpoint{ID: uuid.New()})

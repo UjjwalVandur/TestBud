@@ -74,33 +74,15 @@ export async function uploadSchema(
   version: string,
   file: File
 ): Promise<UploadSchemaResult> {
-  const token = await getToken();
   const form = new FormData();
   form.append("project_id", projectId);
   form.append("version", version);
   form.append("file", file);
 
-  const headers: Record<string, string> = {};
-  if (token) {
-    if (token.startsWith("tb_")) {
-      headers["X-API-Key"] = token;
-    } else {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-  }
-
-  const res = await fetch(`${BASE_URL}/api/schemas`, {
+  return request("/api/schemas", {
     method: "POST",
-    headers,
     body: form,
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      (body as { error?: string }).error ?? `HTTP ${res.status}`
-    );
-  }
-  return res.json() as Promise<UploadSchemaResult>;
 }
 
 /* ── Executions ── */

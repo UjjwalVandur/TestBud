@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -42,7 +42,7 @@ func TestGetCoverageReport_NoEndpoints(t *testing.T) {
 	svc := &CoverageService{
 		schemaRepo: &fakeCovSchemaRepo{endpoints: nil},
 		execRepo:   &fakeCovExecRepo{},
-		logger:     logrus.New(),
+		logger:     slog.Default(),
 	}
 
 	result, err := svc.getCoverageResult(context.Background(), uuid.New())
@@ -76,7 +76,7 @@ func TestGetCoverageReport_NoExecutions(t *testing.T) {
 			},
 		},
 		execRepo: &fakeCovExecRepo{executions: nil},
-		logger:   logrus.New(),
+		logger:   slog.Default(),
 	}
 
 	result, err := svc.getCoverageResult(context.Background(), uuid.New())
@@ -125,7 +125,7 @@ func TestGetCoverageReport_FullExecution(t *testing.T) {
 				{TestCaseID: tc2ID, ActualStatus: 400, Passed: true},
 			},
 		},
-		logger: logrus.New(),
+		logger: slog.Default(),
 	}
 
 	result, err := svc.getCoverageResult(context.Background(), uuid.New())
@@ -176,7 +176,7 @@ func TestGetCoverageReport_PartialExecution(t *testing.T) {
 				{TestCaseID: tc1ID, ActualStatus: 200, Passed: true},
 			},
 		},
-		logger: logrus.New(),
+		logger: slog.Default(),
 	}
 
 	result, err := svc.getCoverageResult(context.Background(), uuid.New())

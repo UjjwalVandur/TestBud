@@ -2,12 +2,12 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 
 	"github.com/UjjwalVandur/TestBud/internal/executor"
@@ -127,7 +127,7 @@ func TestExecutionService_RunsAllTestCases(t *testing.T) {
 		result: models.Execution{ActualStatus: 200, Passed: true},
 	}
 
-	svc := NewExecutionService(schemaRepo, execRepo, exec, logrus.New())
+	svc := NewExecutionService(schemaRepo, execRepo, exec, slog.Default())
 	result, err := svc.ExecuteSchemaTests(context.Background(), ExecuteSchemaInput{
 		SchemaID:  uuid.New(),
 		TargetURL: "http://localhost:8080",
@@ -159,7 +159,7 @@ func TestExecutionServiceListExecutions(t *testing.T) {
 			{ID: uuid.New(), TestCaseID: uuid.New(), Passed: true, ResponseMs: 150, RanAt: time.Now()},
 		},
 	}
-	svc := NewExecutionService(&fakeExecSchemaRepo{}, execRepo, &fakeTestExecutor{}, logrus.New())
+	svc := NewExecutionService(&fakeExecSchemaRepo{}, execRepo, &fakeTestExecutor{}, slog.Default())
 
 	res, err := svc.ListExecutions(context.Background(), schemaID)
 	if err != nil {
@@ -206,7 +206,7 @@ func TestExecutionService_ConcurrencyCap(t *testing.T) {
 		result: models.Execution{ActualStatus: 200, Passed: true},
 	}
 
-	svc := NewExecutionService(schemaRepo, execRepo, exec, logrus.New())
+	svc := NewExecutionService(schemaRepo, execRepo, exec, slog.Default())
 	result, err := svc.ExecuteSchemaTests(context.Background(), ExecuteSchemaInput{
 		SchemaID:  uuid.New(),
 		TargetURL: "http://localhost:8080",
@@ -229,7 +229,7 @@ func TestExecutionService_EmptySchema(t *testing.T) {
 	execRepo := &fakeExecRepo{}
 	exec := &fakeTestExecutor{}
 
-	svc := NewExecutionService(schemaRepo, execRepo, exec, logrus.New())
+	svc := NewExecutionService(schemaRepo, execRepo, exec, slog.Default())
 	result, err := svc.ExecuteSchemaTests(context.Background(), ExecuteSchemaInput{
 		SchemaID:  uuid.New(),
 		TargetURL: "http://localhost:8080",
@@ -260,7 +260,7 @@ func TestExecutionService_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	svc := NewExecutionService(schemaRepo, execRepo, exec, logrus.New())
+	svc := NewExecutionService(schemaRepo, execRepo, exec, slog.Default())
 	result, err := svc.ExecuteSchemaTests(ctx, ExecuteSchemaInput{
 		SchemaID:  uuid.New(),
 		TargetURL: "http://localhost:8080",
@@ -289,7 +289,7 @@ func TestExecutionService_MixedPassFail(t *testing.T) {
 	// Use a custom executor that alternates pass/fail.
 	alternating := &alternatingExecutor{}
 
-	svc := NewExecutionService(schemaRepo, execRepo, alternating, logrus.New())
+	svc := NewExecutionService(schemaRepo, execRepo, alternating, slog.Default())
 	result, err := svc.ExecuteSchemaTests(context.Background(), ExecuteSchemaInput{
 		SchemaID:  uuid.New(),
 		TargetURL: "http://localhost:8080",

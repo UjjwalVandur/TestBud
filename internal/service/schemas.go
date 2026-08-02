@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
@@ -12,6 +11,7 @@ import (
 	"github.com/UjjwalVandur/TestBud/internal/models"
 	"github.com/UjjwalVandur/TestBud/internal/parser"
 	"github.com/UjjwalVandur/TestBud/internal/repository"
+	"github.com/UjjwalVandur/TestBud/internal/util"
 )
 
 type SchemaParser interface {
@@ -350,22 +350,9 @@ func isAuthOnlyChange(old, new models.Endpoint) bool {
 	if old.AuthRequired == new.AuthRequired {
 		return false // auth didn't change
 	}
-	return jsonBytesEqual(old.ParametersJSON, new.ParametersJSON) &&
-		jsonBytesEqual(old.RequestSchemaJSON, new.RequestSchemaJSON) &&
-		jsonBytesEqual(old.ResponseSchemaJSON, new.ResponseSchemaJSON)
+	return util.JSONBytesEqual(old.ParametersJSON, new.ParametersJSON) &&
+		util.JSONBytesEqual(old.RequestSchemaJSON, new.RequestSchemaJSON) &&
+		util.JSONBytesEqual(old.ResponseSchemaJSON, new.ResponseSchemaJSON)
 }
 
-// jsonBytesEqual compares two JSON byte slices for semantic equality.
-func jsonBytesEqual(a, b []byte) bool {
-	if string(a) == string(b) {
-		return true
-	}
-	var va, vb interface{}
-	if err := json.Unmarshal(a, &va); err != nil {
-		return false
-	}
-	if err := json.Unmarshal(b, &vb); err != nil {
-		return false
-	}
-	return reflect.DeepEqual(va, vb)
-}
+

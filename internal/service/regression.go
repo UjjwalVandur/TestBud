@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
+	"log/slog"
 
 	"github.com/UjjwalVandur/TestBud/internal/regression"
 	"github.com/UjjwalVandur/TestBud/internal/repository"
@@ -15,11 +15,11 @@ import (
 // the regression diff between them.
 type RegressionService struct {
 	schemaRepo repository.SchemaRepository
-	logger     *logrus.Logger
+	logger     *slog.Logger
 }
 
 // NewRegressionService creates a new RegressionService.
-func NewRegressionService(schemaRepo repository.SchemaRepository, logger *logrus.Logger) *RegressionService {
+func NewRegressionService(schemaRepo repository.SchemaRepository, logger *slog.Logger) *RegressionService {
 	return &RegressionService{
 		schemaRepo: schemaRepo,
 		logger:     logger,

@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/robfig/cron/v3"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/aigenerator"
 	"github.com/UjjwalVandur/TestBud/internal/api"
@@ -24,18 +22,18 @@ import (
 )
 
 func main() {
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	logger.SetOutput(os.Stdout)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	cfg, err := config.Load(".")
 	if err != nil {
-		logger.WithError(err).Fatal("load config")
+		logger.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
 	db, err := database.Connect(cfg)
 	if err != nil {
-		logger.WithError(err).Fatal("connect database")
+		logger.Error("connect database", "error", err)
+		os.Exit(1)
 	}
 
 	schemaRepo := repository.NewGormSchemaRepository(db)
@@ -49,13 +47,13 @@ func main() {
 	if cfg.BedrockRegion != "" && cfg.BedrockModelID != "" {
 		aiGen, err := aigenerator.New(cfg.BedrockRegion, cfg.BedrockModelID, aigenerator.WithLogger(logger))
 		if err != nil {
-			logger.WithError(err).Warn("ai generator init failed, using rule-based only")
+			logger.Warn("ai generator init failed, using rule-based only", "error", err)
 		} else {
 			testGen = generator.NewCompositeGenerator(ruleGen, aiGen, logger)
-			logger.WithFields(logrus.Fields{
-				"region":   cfg.BedrockRegion,
-				"model_id": cfg.BedrockModelID,
-			}).Info("ai-powered test case generation enabled (AWS Bedrock / Gemma 4)")
+			logger.Info("ai-powered test case generation enabled (AWS Bedrock / Gemma 4)", 
+				"region", cfg.BedrockRegion,
+				"model_id", cfg.BedrockModelID,
+			)
 		}
 	}
 
@@ -75,23 +73,28 @@ func main() {
 		ClerkSecretKey:    cfg.ClerkSecretKey,
 	})
 
-	// 90-day execution retention cron — runs daily at 2:00 AM.
-	retentionCron := cron.New()
-	_, err = retentionCron.AddFunc("0 2 * * *", func() {
-		cutoff := time.Now().UTC().AddDate(0, 0, -90)
-		deleted, err := execRepo.DeleteOldExecutions(context.Background(), cutoff)
-		if err != nil {
-			logger.WithError(err).Error("execution retention cleanup failed")
-			return
+	// 90-day execution retention — runs daily.
+	retentionStop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cutoff := time.Now().UTC().AddDate(0, 0, -90)
+				deleted, err := execRepo.DeleteOldExecutions(context.Background(), cutoff)
+				if err != nil {
+					logger.Error("execution retention cleanup failed", "error", err)
+					continue
+				}
+				if deleted > 0 {
+					logger.Info("execution retention cleanup completed", "deleted", deleted)
+				}
+			case <-retentionStop:
+				return
+			}
 		}
-		if deleted > 0 {
-			logger.WithField("deleted", deleted).Info("execution retention cleanup completed")
-		}
-	})
-	if err != nil {
-		logger.WithError(err).Fatal("schedule retention cron")
-	}
-	retentionCron.Start()
+	}()
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -100,9 +103,10 @@ func main() {
 	}
 
 	go func() {
-		logger.WithField("addr", server.Addr).Info("api server listening")
+		logger.Info("api server listening", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.WithError(err).Fatal("api server failed")
+			logger.Error("api server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -110,12 +114,12 @@ func main() {
 	defer stop()
 	<-shutdownCtx.Done()
 
-	// Graceful shutdown: stop cron first, then the HTTP server.
-	retentionCron.Stop()
+	// Graceful shutdown: stop retention goroutine first, then the HTTP server.
+	close(retentionStop)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		logger.WithError(err).Error("api server shutdown failed")
+		logger.Error("api server shutdown failed", "error", err)
 	}
 }

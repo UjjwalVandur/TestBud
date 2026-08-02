@@ -7,12 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/generator"
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -28,12 +27,12 @@ type HTTPClient interface {
 
 // AIGenerator generates supplementary edge-case test cases using AWS Bedrock.
 type AIGenerator struct {
-	region     string
-	modelID    string
+	region      string
+	modelID     string
 	endpointURL string // Custom endpoint URL for testing or Bedrock Mantle
-	httpClient HTTPClient
-	logger     *logrus.Logger
-	rateLimit  time.Duration
+	httpClient  *http.Client
+	logger      *slog.Logger
+	rateLimit   time.Duration
 	mu         sync.Mutex
 	lastCall   time.Time
 }
@@ -41,31 +40,10 @@ type AIGenerator struct {
 // Option configures AIGenerator.
 type Option func(*AIGenerator)
 
-// WithHTTPClient sets a custom HTTP client (useful for unit tests).
-func WithHTTPClient(client HTTPClient) Option {
-	return func(g *AIGenerator) {
-		g.httpClient = client
-	}
-}
-
-// WithEndpointURL sets a custom endpoint URL (useful for unit tests or proxies).
-func WithEndpointURL(url string) Option {
-	return func(g *AIGenerator) {
-		g.endpointURL = url
-	}
-}
-
 // WithLogger sets a custom logger.
-func WithLogger(logger *logrus.Logger) Option {
+func WithLogger(logger *slog.Logger) Option {
 	return func(g *AIGenerator) {
 		g.logger = logger
-	}
-}
-
-// WithRateLimit sets a custom rate-limiting delay between LLM requests.
-func WithRateLimit(delay time.Duration) Option {
-	return func(g *AIGenerator) {
-		g.rateLimit = delay
 	}
 }
 
@@ -82,7 +60,7 @@ func New(region, modelID string, opts ...Option) (*AIGenerator, error) {
 		region:     region,
 		modelID:    modelID,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
-		logger:     logrus.New(),
+		logger:     slog.Default(),
 		rateLimit:  DefaultRateLimitDelay,
 	}
 
@@ -138,42 +116,42 @@ func (g *AIGenerator) Generate(ctx context.Context, endpoint models.Endpoint) ([
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		g.logger.WithError(err).Warn("AI generator: failed to marshal prompt body")
+		g.logger.Warn("AI generator: failed to marshal prompt body", "error", err)
 		return nil, nil
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.endpointURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		g.logger.WithError(err).Warn("AI generator: failed to create request")
+		g.logger.Warn("AI generator: failed to create request", "error", err)
 		return nil, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := g.httpClient.Do(req)
 	if err != nil {
-		g.logger.WithError(err).Warn("AI generator: request failed")
+		g.logger.Warn("AI generator: request failed", "error", err)
 		return nil, nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBytes, _ := io.ReadAll(resp.Body)
-		g.logger.WithFields(logrus.Fields{
-			"status": resp.StatusCode,
-			"body":   string(respBytes),
-		}).Warn("AI generator: Bedrock API returned non-200 status")
+		g.logger.Warn("AI generator: Bedrock API returned non-200 status", 
+			"status", resp.StatusCode,
+			"body", string(respBytes),
+		)
 		return nil, nil
 	}
 
 	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		g.logger.WithError(err).Warn("AI generator: failed to read response body")
+		g.logger.Warn("AI generator: failed to read response body", "error", err)
 		return nil, nil
 	}
 
 	rawTestCases, err := g.parseLLMResponse(respData)
 	if err != nil {
-		g.logger.WithError(err).Warn("AI generator: failed to parse LLM response")
+		g.logger.Warn("AI generator: failed to parse LLM response", "error", err)
 		return nil, nil
 	}
 
@@ -199,12 +177,12 @@ func (g *AIGenerator) Generate(ctx context.Context, endpoint models.Endpoint) ([
 		})
 	}
 
-	g.logger.WithFields(logrus.Fields{
-		"endpoint_id": endpoint.ID,
-		"method":      endpoint.Method,
-		"path":        endpoint.Path,
-		"count":       len(testCases),
-	}).Info("AI generator: generated test cases")
+	g.logger.Info("AI generator: generated test cases", 
+		"endpoint_id", endpoint.ID,
+		"method", endpoint.Method,
+		"path", endpoint.Path,
+		"count", len(testCases),
+	)
 
 	return testCases, nil
 }

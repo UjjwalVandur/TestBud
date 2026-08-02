@@ -1,11 +1,10 @@
 package config
 
 import (
-	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
-
-	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -19,40 +18,56 @@ type Config struct {
 	ClerkSecretKey string
 }
 
-func Load(path string) (Config, error) {
-	v := viper.New()
-	v.SetConfigName(".env")
-	v.AddConfigPath(path)
-	v.SetConfigType("env")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
+}
 
-	v.SetDefault("APP_ENV", "development")
-	v.SetDefault("PORT", "8080")
-	v.SetDefault("AUTO_MIGRATE", true)
-	v.SetDefault("CORS_ORIGINS", "http://localhost:3000")
-	v.SetDefault("AWS_BEDROCK_REGION", "")
-	v.SetDefault("AWS_BEDROCK_MODEL_ID", "")
-	v.SetDefault("CLERK_SECRET_KEY", "")
-
-	if err := v.ReadInConfig(); err != nil {
-		var cfgNotFound viper.ConfigFileNotFoundError
-		if !errors.As(err, &cfgNotFound) {
-			return Config{}, fmt.Errorf("read config: %w", err)
+func parseEnvFile(path string) {
+	data, err := os.ReadFile(filepath.Join(path, ".env"))
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			if _, exists := os.LookupEnv(parts[0]); !exists {
+				// Remove quotes if present
+				val := strings.Trim(parts[1], `"'`)
+				os.Setenv(parts[0], val)
+			}
 		}
 	}
+}
+
+func Load(path string) (Config, error) {
+	parseEnvFile(path)
 
 	cfg := Config{
-		AppEnv:         v.GetString("APP_ENV"),
-		Port:           v.GetString("PORT"),
-		DatabaseURL:    v.GetString("DATABASE_URL"),
-		AutoMigrate:    v.GetBool("AUTO_MIGRATE"),
-		BedrockRegion:  v.GetString("AWS_BEDROCK_REGION"),
-		BedrockModelID: v.GetString("AWS_BEDROCK_MODEL_ID"),
-		ClerkSecretKey: v.GetString("CLERK_SECRET_KEY"),
+		AppEnv:         getEnv("APP_ENV", "development"),
+		Port:           getEnv("PORT", "8080"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		AutoMigrate:    getEnv("AUTO_MIGRATE", "true") == "true",
+		BedrockRegion:  os.Getenv("AWS_BEDROCK_REGION"),
+		BedrockModelID: os.Getenv("AWS_BEDROCK_MODEL_ID"),
+		ClerkSecretKey: os.Getenv("CLERK_SECRET_KEY"),
 	}
 
-	cfg.CORSOrigins = v.GetStringSlice("CORS_ORIGINS")
+	cors := getEnv("CORS_ORIGINS", "http://localhost:3000")
+	if cors != "" {
+		for _, part := range strings.Split(cors, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				cfg.CORSOrigins = append(cfg.CORSOrigins, part)
+			}
+		}
+	}
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")

@@ -18,6 +18,7 @@ and this project adheres to semantic versioning once releases begin.
   - Features an intelligent schema inferencer that synthesizes OpenAPI schemas from concrete Bruno request bodies and parameters, enabling seamless test case generation.
 
 ### Fixed
+- **Regression Detection**: Fixed an unresolved symbol error (`jsonEqual`) in `detector_test.go` by updating it to use the new `util.JSONBytesEqual` helper, restoring the regression testing suite.
 - **Docker & Environment Variables**: Added missing Clerk environment variables (`CLERK_SECRET_KEY` and `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`) to `docker-compose.yml` and `web/Dockerfile` so Clerk initializes correctly in the containerized deployment.
 - **Frontend Build Stability**: Fixed multiple ESLint and TypeScript build issues (e.g., `react-hooks/exhaustive-deps`, removing unsafe `any` types) ensuring `npm run build` passes successfully.
 - Fixed Next.js cascading render warnings (eslint `react-hooks/set-state-in-effect`) in the `/schemas` and `/schemas/[id]/executions` pages.

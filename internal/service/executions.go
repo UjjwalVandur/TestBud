@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/executor"
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -42,7 +42,7 @@ type ExecutionService struct {
 	schemaRepo repository.SchemaRepository
 	execRepo   repository.ExecutionRepository
 	executor   TestExecutor
-	logger     *logrus.Logger
+	logger     *slog.Logger
 }
 
 // NewExecutionService creates a new ExecutionService.
@@ -50,7 +50,7 @@ func NewExecutionService(
 	schemaRepo repository.SchemaRepository,
 	execRepo repository.ExecutionRepository,
 	exec TestExecutor,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *ExecutionService {
 	return &ExecutionService{
 		schemaRepo: schemaRepo,
@@ -114,8 +114,10 @@ func (s *ExecutionService) ExecuteSchemaTests(ctx context.Context, input Execute
 					AltAuthHeaders: input.AltAuthHeaders,
 				})
 				if err != nil {
-					s.logger.WithError(err).WithField("test_case_id", tc.ID).
-						Error("execute test case failed")
+					s.logger.Error("execute test case failed", 
+						"error", err,
+						"test_case_id", tc.ID,
+					)
 					return
 				}
 
@@ -137,8 +139,10 @@ func (s *ExecutionService) ExecuteSchemaTests(ctx context.Context, input Execute
 		}
 
 		if err := s.execRepo.CreateExecution(ctx, &result); err != nil {
-			s.logger.WithError(err).WithField("test_case_id", result.TestCaseID).
-				Error("persist execution failed")
+			s.logger.Error("persist execution failed", 
+				"error", err,
+				"test_case_id", result.TestCaseID,
+			)
 		}
 	}
 

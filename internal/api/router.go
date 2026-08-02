@@ -1,8 +1,9 @@
 package api
 
 import (
+	"log/slog"
+
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/api/handlers"
 	"github.com/UjjwalVandur/TestBud/internal/api/middleware"
@@ -11,7 +12,7 @@ import (
 // RouterDependencies uses interfaces so the router is testable without concrete
 // service/repository implementations (DEV-1 fix).
 type RouterDependencies struct {
-	Logger            *logrus.Logger
+	Logger            *slog.Logger
 	SchemaService     handlers.SchemaService
 	ExecutionService  handlers.ExecutionService
 	CoverageService   handlers.CoverageReporter
@@ -50,17 +51,17 @@ func NewRouter(deps RouterDependencies) *gin.Engine {
 	return router
 }
 
-func requestLogger(logger *logrus.Logger) gin.HandlerFunc {
+func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 	if logger == nil {
-		logger = logrus.New()
+		logger = slog.Default()
 	}
 
 	return func(c *gin.Context) {
 		c.Next()
-		logger.WithFields(logrus.Fields{
-			"method": c.Request.Method,
-			"path":   c.Request.URL.Path,
-			"status": c.Writer.Status(),
-		}).Info("request completed")
+		logger.Info("request completed", 
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"status", c.Writer.Status(),
+		)
 	}
 }

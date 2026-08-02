@@ -2,12 +2,12 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
 	"github.com/UjjwalVandur/TestBud/internal/service"
@@ -47,7 +47,7 @@ func (s stubLookup) GetOrCreateUserByClerkID(_ context.Context, _ string, _ stri
 
 func TestRouterHealthEndpoint(t *testing.T) {
 	r := NewRouter(RouterDependencies{
-		Logger:         logrus.New(),
+		Logger:         slog.Default(),
 		SchemaService: stubUploader{},
 		UserLookup:     stubLookup{userID: uuid.New()},
 	})
@@ -63,7 +63,7 @@ func TestRouterHealthEndpoint(t *testing.T) {
 
 func TestRouterAPIRoutesRequireAuth(t *testing.T) {
 	r := NewRouter(RouterDependencies{
-		Logger:         logrus.New(),
+		Logger:         slog.Default(),
 		SchemaService: stubUploader{},
 		UserLookup:     stubLookup{userID: uuid.Nil}, // always returns Nil → invalid key
 	})

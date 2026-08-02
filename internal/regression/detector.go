@@ -1,13 +1,13 @@
 package regression
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 
 	"github.com/google/uuid"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
+	"github.com/UjjwalVandur/TestBud/internal/util"
 )
 
 // EndpointChange describes a single endpoint difference between two schema versions.
@@ -87,9 +87,9 @@ func Detect(baseEndpoints, targetEndpoints []models.Endpoint, baseSchemaID, targ
 // compareEndpoints checks if two endpoints with the same route differ in any
 // tracked field. Returns nil if they are identical.
 func compareEndpoints(base, target models.Endpoint) *EndpointChange {
-	paramsChanged := !jsonEqual(base.ParametersJSON, target.ParametersJSON)
-	reqChanged := !jsonEqual(base.RequestSchemaJSON, target.RequestSchemaJSON)
-	respChanged := !jsonEqual(base.ResponseSchemaJSON, target.ResponseSchemaJSON)
+	paramsChanged := !util.JSONBytesEqual(base.ParametersJSON, target.ParametersJSON)
+	reqChanged := !util.JSONBytesEqual(base.RequestSchemaJSON, target.RequestSchemaJSON)
+	respChanged := !util.JSONBytesEqual(base.ResponseSchemaJSON, target.ResponseSchemaJSON)
 	authChanged := base.AuthRequired != target.AuthRequired
 
 	if !paramsChanged && !reqChanged && !respChanged && !authChanged {
@@ -121,34 +121,4 @@ func routeKey(method, path string) string {
 	return fmt.Sprintf("%s %s", method, path)
 }
 
-// jsonEqual compares two JSON byte slices for semantic equality.
-// It unmarshals both into interface{} values and compares the re-marshalled
-// canonical form to eliminate differences in key ordering and whitespace.
-func jsonEqual(a, b []byte) bool {
-	// Fast path: byte-equal or both empty/null.
-	if string(a) == string(b) {
-		return true
-	}
 
-	ca := canonicalJSON(a)
-	cb := canonicalJSON(b)
-	return ca == cb
-}
-
-// canonicalJSON returns a deterministic JSON string for comparison.
-// Unmarshals to interface{} then re-marshals with sorted keys.
-// Returns the original string on error (so malformed JSON compares literally).
-func canonicalJSON(raw []byte) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var v interface{}
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return string(raw)
-	}
-	sorted, err := json.Marshal(v)
-	if err != nil {
-		return string(raw)
-	}
-	return string(sorted)
-}

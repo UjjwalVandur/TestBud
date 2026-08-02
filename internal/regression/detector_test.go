@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
-
 	"github.com/UjjwalVandur/TestBud/internal/models"
+	"github.com/UjjwalVandur/TestBud/internal/util"
 )
 
 func TestDetect(t *testing.T) {
@@ -178,7 +178,7 @@ func TestCanonicalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := jsonEqual(tt.a, tt.b)
+			got := util.JSONBytesEqual(tt.a, tt.b)
 			if got != tt.want {
 				t.Errorf("jsonEqual() = %v, want %v", got, tt.want)
 			}

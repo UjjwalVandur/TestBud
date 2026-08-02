@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"gorm.io/datatypes"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -37,7 +37,7 @@ func (f *fakeRegSchemaRepo) FindPredecessorSchema(_ context.Context, _ uuid.UUID
 func TestGetRegressionReport_SchemaNotFound(t *testing.T) {
 	svc := NewRegressionService(&fakeRegSchemaRepo{
 		findByIDResult: nil,
-	}, logrus.New())
+	}, slog.Default())
 
 	_, err := svc.GetRegressionReport(context.Background(), uuid.New())
 	if !errors.Is(err, ErrSchemaNotFound) {
@@ -60,7 +60,7 @@ func TestGetRegressionReport_NoPredecessor_AllAdded(t *testing.T) {
 			},
 		},
 		predecessorResult: nil,
-	}, logrus.New())
+	}, slog.Default())
 
 	report, err := svc.GetRegressionReport(context.Background(), targetID)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestGetRegressionReport_FullDiff(t *testing.T) {
 				{ID: uuid.New(), Method: "PUT", Path: "/pets/{id}", AuthRequired: false, ParametersJSON: datatypes.JSON(`[{"name":"id"}]`), RequestSchemaJSON: datatypes.JSON(`{}`), ResponseSchemaJSON: datatypes.JSON(`{}`)},
 			},
 		},
-	}, logrus.New())
+	}, slog.Default())
 
 	report, err := svc.GetRegressionReport(context.Background(), targetID)
 	if err != nil {
@@ -162,7 +162,7 @@ func TestGetRegressionReport_FullDiff(t *testing.T) {
 func TestGetRegressionReport_FindByIDError(t *testing.T) {
 	svc := NewRegressionService(&fakeRegSchemaRepo{
 		findByIDErr: errors.New("db error"),
-	}, logrus.New())
+	}, slog.Default())
 
 	_, err := svc.GetRegressionReport(context.Background(), uuid.New())
 	if err == nil {

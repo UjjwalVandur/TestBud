@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/coverage"
 	"github.com/UjjwalVandur/TestBud/internal/models"
@@ -29,7 +29,7 @@ type CoverageService struct {
 	schemaRepo   repository.SchemaRepository
 	execRepo     repository.ExecutionRepository
 	coverageRepo *repository.GormCoverageRepository
-	logger       *logrus.Logger
+	logger       *slog.Logger
 }
 
 // NewCoverageService creates a new CoverageService.
@@ -37,7 +37,7 @@ func NewCoverageService(
 	schemaRepo repository.SchemaRepository,
 	execRepo repository.ExecutionRepository,
 	coverageRepo *repository.GormCoverageRepository,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *CoverageService {
 	return &CoverageService{
 		schemaRepo:   schemaRepo,

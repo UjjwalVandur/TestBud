@@ -6,11 +6,11 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/UjjwalVandur/TestBud/internal/config"
 	"github.com/UjjwalVandur/TestBud/internal/database"
@@ -23,17 +23,18 @@ const (
 )
 
 func main() {
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	cfg, err := config.Load(".")
 	if err != nil {
-		logger.WithError(err).Fatal("load config")
+		logger.Error("load config", "error", err)
+		os.Exit(1)
 	}
 
 	db, err := database.Connect(cfg)
 	if err != nil {
-		logger.WithError(err).Fatal("connect database")
+		logger.Error("connect database", "error", err)
+		os.Exit(1)
 	}
 
 	// Check if the demo user already exists.
@@ -53,7 +54,8 @@ func main() {
 	}
 
 	if err := db.Create(&user).Error; err != nil {
-		logger.WithError(err).Fatal("create demo user")
+		logger.Error("create demo user", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("✓ Demo user created: email=%s api_key=%s\n", demoEmail, demoAPIKey)

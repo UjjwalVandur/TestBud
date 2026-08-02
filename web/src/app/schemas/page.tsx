@@ -11,6 +11,14 @@ export default function SchemasPage() {
   const [error, setError] = useState("");
   const [showUpload, setShowUpload] = useState(false);
 
+  // Upload state
+  const [projectId, setProjectId] = useState("");
+  const [version, setVersion] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+
   const refresh = useCallback((isInitial = false) => {
     if (!isInitial) setLoading(true);
     listSchemas()
@@ -23,6 +31,25 @@ export default function SchemasPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh(true);
   }, [refresh]);
+
+  async function handleUploadSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!file) return;
+    setUploading(true);
+    setUploadErr("");
+    try {
+      await uploadSchema(projectId, version, file);
+      setShowUpload(false);
+      setProjectId("");
+      setVersion("");
+      setFile(null);
+      refresh();
+    } catch (ex: unknown) {
+      setUploadErr((ex as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="animate-slide-up">
@@ -46,13 +73,109 @@ export default function SchemasPage() {
 
       {/* Upload modal */}
       {showUpload && (
-        <UploadModal
-          onClose={() => setShowUpload(false)}
-          onSuccess={() => {
-            setShowUpload(false);
-            refresh();
-          }}
-        />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card w-full max-w-lg p-8 animate-slide-up">
+            <h2 className="text-xl font-bold mb-1">Upload Schema</h2>
+            <p className="text-sm text-[var(--text-secondary)] mb-6">
+              Upload an OpenAPI 3.x or Swagger 2.x schema file (JSON or YAML).
+            </p>
+
+            {uploadErr && (
+              <div className="mb-4 rounded-lg bg-[var(--accent-rose)]/10 px-4 py-3 text-sm text-[var(--accent-rose)]">
+                {uploadErr}
+              </div>
+            )}
+
+            <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+                  Project ID
+                </label>
+                <input
+                  required
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  placeholder="UUID of the project"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
+                  Version
+                </label>
+                <input
+                  required
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  placeholder="e.g. 1.0.0"
+                  className="w-full"
+                />
+              </div>
+
+              {/* Dropzone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
+                }}
+                className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer ${
+                  dragOver
+                    ? "border-[var(--accent-blue)] bg-[var(--accent-blue)]/5"
+                    : "border-[var(--border-subtle)] hover:border-[var(--text-muted)]"
+                }`}
+                onClick={() => document.getElementById("file-input")?.click()}
+              >
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".json,.yaml,.yml"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) setFile(e.target.files[0]);
+                  }}
+                />
+                {file ? (
+                  <p className="text-sm font-medium text-[var(--accent-blue)]">
+                    {file.name}{" "}
+                    <span className="text-[var(--text-muted)]">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </span>
+                  </p>
+                ) : (
+                  <>
+                    <span className="text-3xl mb-2">📁</span>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Drag &amp; drop your schema file or{" "}
+                      <span className="text-[var(--accent-blue)] font-medium">
+                        browse
+                      </span>
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 mt-2">
+                <button type="button" onClick={() => setShowUpload(false)} className="btn-secondary">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploading || !file}
+                  className="btn-primary"
+                >
+                  {uploading ? "Uploading…" : "Upload"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Schema list */}
@@ -110,143 +233,6 @@ export default function SchemasPage() {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── Upload modal ── */
-function UploadModal({
-  onClose,
-  onSuccess,
-}: {
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [projectId, setProjectId] = useState("");
-  const [version, setVersion] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [err, setErr] = useState("");
-  const [dragOver, setDragOver] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!file) return;
-    setUploading(true);
-    setErr("");
-    try {
-      await uploadSchema(projectId, version, file);
-      onSuccess();
-    } catch (ex: unknown) {
-      setErr((ex as Error).message);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="glass-card w-full max-w-lg p-8 animate-slide-up">
-        <h2 className="text-xl font-bold mb-1">Upload Schema</h2>
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Upload an OpenAPI 3.x or Swagger 2.x schema file (JSON or YAML).
-        </p>
-
-        {err && (
-          <div className="mb-4 rounded-lg bg-[var(--accent-rose)]/10 px-4 py-3 text-sm text-[var(--accent-rose)]">
-            {err}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-              Project ID
-            </label>
-            <input
-              required
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              placeholder="UUID of the project"
-              className="w-full"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">
-              Version
-            </label>
-            <input
-              required
-              value={version}
-              onChange={(e) => setVersion(e.target.value)}
-              placeholder="e.g. 1.0.0"
-              className="w-full"
-            />
-          </div>
-
-          {/* Dropzone */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]);
-            }}
-            className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer ${
-              dragOver
-                ? "border-[var(--accent-blue)] bg-[var(--accent-blue)]/5"
-                : "border-[var(--border-subtle)] hover:border-[var(--text-muted)]"
-            }`}
-            onClick={() => document.getElementById("file-input")?.click()}
-          >
-            <input
-              id="file-input"
-              type="file"
-              accept=".json,.yaml,.yml"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) setFile(e.target.files[0]);
-              }}
-            />
-            {file ? (
-              <p className="text-sm font-medium text-[var(--accent-blue)]">
-                {file.name}{" "}
-                <span className="text-[var(--text-muted)]">
-                  ({(file.size / 1024).toFixed(1)} KB)
-                </span>
-              </p>
-            ) : (
-              <>
-                <span className="text-3xl mb-2">📁</span>
-                <p className="text-sm text-[var(--text-secondary)]">
-                  Drag &amp; drop your schema file or{" "}
-                  <span className="text-[var(--accent-blue)] font-medium">
-                    browse
-                  </span>
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-3 mt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={uploading || !file}
-              className="btn-primary"
-            >
-              {uploading ? "Uploading…" : "Upload"}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

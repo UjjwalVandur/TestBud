@@ -2,8 +2,7 @@ package generator
 
 import (
 	"context"
-
-	"github.com/sirupsen/logrus"
+	"log/slog"
 
 	"github.com/UjjwalVandur/TestBud/internal/models"
 )
@@ -17,14 +16,14 @@ type SubGenerator interface {
 type CompositeGenerator struct {
 	ruleGen SubGenerator
 	aiGen   SubGenerator
-	logger  *logrus.Logger
+	logger  *slog.Logger
 }
 
 // NewCompositeGenerator creates a new CompositeGenerator.
 // aiGen can be nil if AI generation is disabled or unconfigured.
-func NewCompositeGenerator(ruleGen SubGenerator, aiGen SubGenerator, logger *logrus.Logger) *CompositeGenerator {
+func NewCompositeGenerator(ruleGen SubGenerator, aiGen SubGenerator, logger *slog.Logger) *CompositeGenerator {
 	if logger == nil {
-		logger = logrus.New()
+		logger = slog.Default()
 	}
 	return &CompositeGenerator{
 		ruleGen: ruleGen,
@@ -46,11 +45,12 @@ func (c *CompositeGenerator) Generate(ctx context.Context, endpoint models.Endpo
 	if c.aiGen != nil {
 		aiCases, err := c.aiGen.Generate(ctx, endpoint)
 		if err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"endpoint_id": endpoint.ID,
-				"method":      endpoint.Method,
-				"path":        endpoint.Path,
-			}).Warn("composite generator: AI generation failed, falling back to rule-based test cases only")
+			c.logger.Warn("composite generator: AI generation failed, falling back to rule-based test cases only", 
+				"error", err,
+				"endpoint_id", endpoint.ID,
+				"method", endpoint.Method,
+				"path", endpoint.Path,
+			)
 		} else if len(aiCases) > 0 {
 			cases = append(cases, aiCases...)
 		}
