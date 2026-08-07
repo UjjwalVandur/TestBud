@@ -7,9 +7,13 @@ services:
     plan: free
     branch: main
     healthCheckPath: /health
+    customDomains:
+      - name: api.testbud.me
     envVars:
       - key: PORT
         value: 8080
+      - key: APP_ENV
+        value: production
       - key: DATABASE_URL
         sync: false
       - key: AUTO_MIGRATE

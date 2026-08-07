@@ -3,6 +3,7 @@
 !.env.example
 
 bin/
+*.exe
 dist/
 coverage.out
 .cache/

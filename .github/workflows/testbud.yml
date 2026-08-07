@@ -39,7 +39,7 @@ jobs:
           TESTBUD_API_KEY: ${{ secrets.TESTBUD_API_KEY }}
         run: |
           go run github.com/UjjwalVandur/TestBud/cmd/cli@latest \
-            --api-url "https://testbud.example.com" \
+            --api-url "https://api.testbud.me" \
             --api-key "$TESTBUD_API_KEY" \
             --project-id "${{ vars.PROJECT_ID }}" \
             --version "${{ github.sha }}" \
