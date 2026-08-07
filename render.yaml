@@ -7,8 +7,6 @@ services:
     plan: free
     branch: main
     healthCheckPath: /health
-    customDomains:
-      - name: api.testbud.me
     envVars:
       - key: PORT
         value: 8080
